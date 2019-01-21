@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib
+import math
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from company import Company
@@ -146,5 +147,5 @@ class MultiStepBaselineCompany(Company):
             predicted = predictions[:, :(self.n_lag + i)]
             # display("actual", actual)
             # display("predicted", predicted)
-            rmse = sqrt(mean_squared_error(actual, predicted))
+            rmse = math.sqrt(mean_squared_error(actual, predicted))
             print('t+%d RMSE: %f' % ((i + 1), rmse))

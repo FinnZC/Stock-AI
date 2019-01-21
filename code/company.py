@@ -93,10 +93,10 @@ class Company(object):
         # trend whether the prediction for the next day is up or down and its accuracy
         elif metric == "trend":
             # first case is special case since the last data input from the training data is used
-            price_1_day_before = self.train_raw_series[self.train_raw_series.index.tolist()[-1]]
+            price_1_day_before = self.train_raw_series[-1]
             correct_counts = 0
             index = self.test_raw_series.index
-            for i in range(1, len(self.test_raw_series)):
+            for i in range(len(self.test_raw_series)):
                 if self.test_raw_series[index[i]] > price_1_day_before:
                     true_trend = "up"
                 elif self.test_raw_series[index[i]] < price_1_day_before:
