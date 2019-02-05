@@ -33,15 +33,12 @@ class OneStepLSTMCompany(Company):
         # First item is special case because we use the difference of the last training pair to predict the first test price
         if source == "test":
             diff.append(self.train_raw_series.values[-1] - self.train_raw_series.values[-2])
+            diff.append(self.test_raw_series.values[0] - self.train_raw_series.values[-1])
 
         for i in range(1, len(series)):
             value = series[i] - series[i - 1]
             diff.append(value)
 
-        # Last item is special case because there is no next value thus the diff is
-        # 1 size shorter than the original test_raw. We fix this by adding an additional item
-        if source == "test":
-            diff.append(0)  # placeholder for the last prediction, not used in anyway
 
         return pd.Series(diff)
 
@@ -112,7 +109,6 @@ class OneStepLSTMCompany(Company):
         display(test_diff_values)
         print("size of supervised test data: ", len(test))
         display(test)
-        """
         print("size of train_raw data: ", len(self.train_raw_series))
         display(self.train_raw_series)
         print("size of test_raw data: ", len(self.test_raw_series))
@@ -122,6 +118,18 @@ class OneStepLSTMCompany(Company):
         print(train_scaled)
         print("size of supervised test_scaled data: ", len(test_scaled))
         print(test_scaled)
+        """
+
+        display("raw train", self.train_raw_series.values)
+        display("diff train", train_diff_values)
+        display("scaled train", train_scaled)
+        display("supervised train", train_supervised_pd)
+
+        display("raw test", self.test_raw_series.values)
+        display("diff test", test_diff_values)
+        display("scaled test", test_scaled)
+        display("supervised test", test_supervised_pd)
+
 
         return train_scaled, test_scaled
 
