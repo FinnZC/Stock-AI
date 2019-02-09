@@ -22,10 +22,8 @@ class OneStepLSTMCompany(Company):
                                                      start_delay=1)
         self.train_scaled, self.test_scaled = self.preprocess_data()
         # same as test_raw_series with the addition of the last element of train_raw_series
-        self.invert_difference_series = self.get_share_prices(train_end_test_start_date_string, test_end_date_string,
-                                                              start_delay=1)
         # Add the last training sample to the start of the test raw series so the invert differnce can work
-        self.invert_difference_series.at[self.train_raw_series.index[-1]] = self.train_raw_series.tail(1).item()
+        self.invert_difference_series_values = [self.train_raw_series.values[-1]] + self.test_raw_series.values.tolist()
 
     # create a differenced series
     def difference(self, series, source):
@@ -39,7 +37,6 @@ class OneStepLSTMCompany(Company):
             value = series[i] - series[i - 1]
             diff.append(value)
 
-
         return pd.Series(diff)
 
     # adapted from https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
@@ -50,12 +47,6 @@ class OneStepLSTMCompany(Company):
         df = pd.concat(columns, axis=1)
         df.fillna(0, inplace=True)
         return df
-
-    # invert differenced value
-    def inverse_difference(self, pred, interval=1):
-        # print("interval", interval)
-        print("invert difference to ", self.invert_difference_series.values[-interval])
-        return pred + self.invert_difference_series.values[-interval]
 
     # scale train and test data to [-1, 1]
     def scale(self, train, test):
@@ -70,21 +61,13 @@ class OneStepLSTMCompany(Company):
         test_scaled = scaler.transform(test)
         return scaler, train_scaled, test_scaled
 
-    # inverse scaling for a forecasted value
-    def invert_scale(self, X, value):
-        new_row = [x for x in X] + [value]
-        array = np.array(new_row)
-        array = array.reshape(1, len(array))
-        inverted = self.scaler.inverse_transform(array)
-        return inverted[0, -1]
-
     def preprocess_data(self):
         # transform data to be stationary
         train_diff_values = self.difference(self.train_raw_series.values, "train")
         test_diff_values = self.difference(self.test_raw_series.values, "test")
 
         # transform data to be supervised learning
-        train_supervised_pd = self.timeseries_to_supervised(train_diff_values, 1)
+        train_supervised_pd = self.timeseries_to_supervised(train_diff_values, 1).iloc[1:]
         train = train_supervised_pd.values
 
         # removes first row because it is not relevant
@@ -119,17 +102,15 @@ class OneStepLSTMCompany(Company):
         print("size of supervised test_scaled data: ", len(test_scaled))
         print(test_scaled)
         """
-
-        display("raw train", self.train_raw_series.values)
-        display("diff train", train_diff_values)
+        display("raw train", self.train_raw_series)
+        display("raw test", self.test_raw_series)
+        # display("diff train", train_diff_values)
         display("scaled train", train_scaled)
-        display("supervised train", train_supervised_pd)
+        # display("supervised train", train_supervised_pd)
 
-        display("raw test", self.test_raw_series.values)
-        display("diff test", test_diff_values)
+        # display("diff test", test_diff_values)
         display("scaled test", test_scaled)
-        display("supervised test", test_supervised_pd)
-
+        # display("supervised test", test_supervised_pd)
 
         return train_scaled, test_scaled
 
@@ -194,10 +175,11 @@ class OneStepLSTMCompany(Company):
             X, y = self.test_scaled[i, 0:-1], self.test_scaled[i, -1]
             print("X: ", X, "y: ", y)
             pred = self.forecast_lstm(X)
+            print("Pred: ", pred)
             # invert scaling
             pred = self.invert_scale(X, pred)
             # invert differencing
-            pred = self.inverse_difference(pred, len(self.test_scaled) - i)
+            pred = self.inverse_difference(pred, i)
             # store forecast
             predictions.at[test_index[i]] = pred
 
@@ -209,3 +191,17 @@ class OneStepLSTMCompany(Company):
         print("predictions", predictions)
         return predictions
 
+    # invert differenced value
+    def inverse_difference(self, pred, index=1):
+        # print("interval", interval)
+        print("Inverse difference  Pred: ", pred, " + Reference Price: ", self.invert_difference_series_values[index])
+        return pred + self.invert_difference_series_values[index]
+
+    # inverse scaling for a forecasted value
+    def invert_scale(self, X, pred):
+        new_row = [x for x in X] + [pred]
+        array = np.array(new_row)
+        array = array.reshape(1, len(array))
+        inverted = self.scaler.inverse_transform(array)
+        print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inverted[0, -1])
+        return inverted[0, -1]
