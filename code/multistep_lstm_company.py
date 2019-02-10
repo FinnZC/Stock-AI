@@ -10,9 +10,10 @@ from keras.layers import LSTM
 from sklearn.metrics import mean_squared_error
 from numpy import array
 from company import Company
+from time import time
 
 
-class MultiStepLSTMCompany(Company):
+class MultiStepLSTMCompany(Company) :
     def __init__(self, name, train_start_date_string, train_end_test_start_date_string, test_end_date_string,
                  n_lag, n_seq, n_epochs, n_batch, n_neurons):
         Company.__init__(self, name)
@@ -27,6 +28,7 @@ class MultiStepLSTMCompany(Company):
         self.n_batch = n_batch
         self.n_neurons = n_neurons
         self.train_scaled, self.test_scaled = self.preprocess_data()
+        self.time_taken_to_train = 0
 
     def preprocess_data(self):
 
@@ -53,15 +55,15 @@ class MultiStepLSTMCompany(Company):
         # removes first row because it is not relevant
         test_supervised_pd = self.timeseries_to_supervised(test_scaled, self.n_lag, self.n_seq)
         test = test_supervised_pd.values
-        display("raw train", self.train_raw_series)
-        display("raw test", self.test_raw_series)
+        # display("raw train", self.train_raw_series)
+        # display("raw test", self.test_raw_series)
         # display("diff train", train_diff_values)
         # display("scaled train", train_scaled)
-        display("supervised train", train_supervised_pd)
+        # display("supervised train", train_supervised_pd)
 
         # display("diff test", test_diff_values)
         # display("scaled test", test_scaled)
-        display("supervised test", test_supervised_pd)
+        # display("supervised test", test_supervised_pd)
         return train, test
 
     # create a differenced series
@@ -105,7 +107,7 @@ class MultiStepLSTMCompany(Company):
     # scale train and test data to [-1, 1]
     def scale(self, train, test):
         # fit scaler
-        display(train)
+        # display(train)
         scaler = MinMaxScaler(feature_range=(-1, 1))
         scaler = scaler.fit(train)
         # transform train
@@ -119,20 +121,21 @@ class MultiStepLSTMCompany(Company):
     # fit the model
     def train(self):
         print("Fitting the model")
-
+        start_time = time()
         self.lstm_model = self.fit_lstm(self.train_scaled)
         # forecast the entire training dataset to build up state for forecasting
         train_reshaped = self.train_scaled[:, 0].reshape(len(self.train_scaled), 1, 1)
         self.lstm_model.predict(train_reshaped, batch_size=self.n_batch)
-        print("Finished fitting the model")
+        self.time_taken_to_train = time() - start_time
+        print("Finished fitting the model, time taken to train: %.1f s" % self.time_taken_to_train)
 
     # fit an LSTM network to training data
     def fit_lstm(self, train):
         # reshape training into [samples, timesteps, features]
         X, y = train[:, 0:self.n_lag], train[:, self.n_lag:]
         X = X.reshape(X.shape[0], 1, X.shape[1])
-        display(X)
-        display(y)
+        display("train data", X)
+        display("test data", y)
         # design network
         model = Sequential()
         model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]), stateful=True))
@@ -198,39 +201,6 @@ class MultiStepLSTMCompany(Company):
         plt.title("Stock price prediction for " + self.name)
         plt.show()
 
-    # invert differenced forecast
-    def inverse_difference(self, last_ob, forecast):
-        display("last_ob:", last_ob, "   forecast:", forecast)
-
-        # invert first forecast
-        inverted = list()
-        inverted.append(forecast[0] + last_ob)
-        # propagate difference forecast using inverted first value
-        for i in range(1, len(forecast)):
-            inverted.append(forecast[i] + inverted[i - 1])
-        return inverted
-
-    # inverse data transform on forecasts
-    def inverse_transform(self, series, predictions, n_test):
-        # walk-forward validation on the test data
-        inverted_predictions = pd.Series()
-        pred_index = predictions.index
-        for i in range(len(predictions)):
-            # create array from forecast
-            pred = array(predictions[i])
-            pred = pred.reshape(1, len(pred))
-            # invert scaling
-            inv_scale = self.scaler.inverse_transform(pred)
-            inv_scale = inv_scale[0, :]
-            # invert differencing
-            # -1 to get the t-1 price
-            index = len(series) - n_test + i - 1
-            last_ob = series.values[index]
-            inv_diff = self.inverse_difference(last_ob, inv_scale)
-            # store
-            inverted_predictions.at[pred_index[i]] = inv_diff
-        return inverted_predictions
-
     # make a one-step forecast standalone
     def forecast_lstm_one_step(self):
         predictions = pd.Series()
@@ -276,7 +246,7 @@ class MultiStepLSTMCompany(Company):
         # convert actual tests and predictions to an appropriate list or arrays
         # construct list of rows
         # first item is test data for the next days, hence not taken into account to measure the prediction
-        test_values = multi_step_lstm.test_raw_series.values
+        test_values = self.test_raw_series.values
         actual = list()
         for i in range(len(test_values) - self.n_seq + 1):
             next_days_values = test_values[i + self.n_lag - 1: i + self.n_seq]
@@ -296,3 +266,76 @@ class MultiStepLSTMCompany(Company):
                 rmses.append(rmse)
 
             return rmses
+
+        elif metric == "trend":
+            # first case is special case since the last data input from the training data is used
+            price_1_day_before = self.train_raw_series[-1]
+            index = self.test_raw_series.index
+            trends = list()
+            for i in range(self.n_seq):
+                print("\nCalculating trend score for ", i + 1)
+                correct_counts = 0
+                for j in range(len(predictions)):
+                    actual = self.test_raw_series[index[j + i]]
+                    if actual > price_1_day_before:
+                        true_trend = "up"
+                    elif actual < price_1_day_before:
+                        true_trend = "down"
+                    else:
+                        true_trend = "neutral"
+
+                    if predictions[j, i] > price_1_day_before:
+                        predicted_trend = "up"
+                    elif predictions[j, i] < price_1_day_before:
+                        predicted_trend = "down"
+                    else:
+                        predicted_trend = "neutral"
+
+                    if true_trend == predicted_trend:
+                        correct_counts += 1
+                    print("Price 1 day before", price_1_day_before)
+                    print("Actual price: ", actual, " | Predicted price: ", predictions[j, i])
+                    print("Actual trend: ", true_trend, " | Predicted trend: ", predicted_trend)
+                    # next day
+                    price_1_day_before = actual
+                price_1_day_before = self.test_raw_series[index[i]]
+                print("Correct counts: ", correct_counts, "  Size of test set:", len(self.test_raw_series))
+                trends.append(correct_counts / len(self.test_raw_series))
+            return trends
+        else:
+            print(metric, " is not an valid metric. Return NONE")
+            return None
+
+    # invert differenced forecast
+    def inverse_difference(self, last_ob, forecast):
+        # invert first forecast
+        inverted = list()
+        inverted.append(forecast[0] + last_ob)
+        # propagate difference forecast using inverted first value
+        for i in range(1, len(forecast)):
+            inverted.append(forecast[i] + inverted[i - 1])
+
+        print("Inverse difference Pred: ", forecast, "  + Reference Price:", last_ob, " = ", inverted)
+        return inverted
+
+    # inverse data transform on forecasts
+    def inverse_transform(self, series, predictions, n_test):
+        # walk-forward validation on the test data
+        inverted_predictions = pd.Series()
+        pred_index = predictions.index
+        for i in range(len(predictions)):
+            # create array from forecast
+            pred = array(predictions[i])
+            pred = pred.reshape(1, len(pred))
+            # invert scaling
+            inv_scale = self.scaler.inverse_transform(pred)
+            inv_scale = inv_scale[0, :]
+            print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
+            # invert differencing
+            # -1 to get the t-1 price
+            index = len(series) - n_test + i - 1
+            last_ob = series.values[index]
+            inv_diff = self.inverse_difference(last_ob, inv_scale)
+            # store
+            inverted_predictions.at[pred_index[i]] = inv_diff
+        return inverted_predictions

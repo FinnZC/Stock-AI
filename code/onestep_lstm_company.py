@@ -6,6 +6,7 @@ from keras.layers import Dense
 from keras.layers import LSTM
 
 from company import Company
+from time import time
 
 
 class OneStepLSTMCompany(Company):
@@ -102,14 +103,14 @@ class OneStepLSTMCompany(Company):
         print("size of supervised test_scaled data: ", len(test_scaled))
         print(test_scaled)
         """
-        display("raw train", self.train_raw_series)
-        display("raw test", self.test_raw_series)
+        #display("raw train", self.train_raw_series)
+        #display("raw test", self.test_raw_series)
         # display("diff train", train_diff_values)
-        display("scaled train", train_scaled)
+        #display("scaled train", train_scaled)
         # display("supervised train", train_supervised_pd)
 
         # display("diff test", test_diff_values)
-        display("scaled test", test_scaled)
+        #display("scaled test", test_scaled)
         # display("supervised test", test_supervised_pd)
 
         return train_scaled, test_scaled
@@ -117,11 +118,13 @@ class OneStepLSTMCompany(Company):
     # fit the model
     def train(self):
         print("Fitting the model")
+        start_time = time()
         self.lstm_model = self.fit_lstm(self.train_scaled)
         # forecast the entire training dataset to build up state for forecasting
         train_reshaped = self.train_scaled[:, 0].reshape(len(self.train_scaled), 1, 1)
         self.lstm_model.predict(train_reshaped, batch_size=self.n_batch)
-        print("Finished fitting the model")
+        self.time_taken_to_train = time() - start_time
+        print("Finished fitting the model, time taken to train: %.1f s" % self.time_taken_to_train)
 
     # fit an LSTM network to training data
     def fit_lstm(self, train):
@@ -194,8 +197,10 @@ class OneStepLSTMCompany(Company):
     # invert differenced value
     def inverse_difference(self, pred, index=1):
         # print("interval", interval)
-        print("Inverse difference  Pred: ", pred, " + Reference Price: ", self.invert_difference_series_values[index])
-        return pred + self.invert_difference_series_values[index]
+        result = pred + self.invert_difference_series_values[index]
+        print("Inverse difference  Pred: ", pred, " + Reference Price: ", self.invert_difference_series_values[index],
+              " = ", result)
+        return result
 
     # inverse scaling for a forecasted value
     def invert_scale(self, X, pred):
