@@ -13,7 +13,7 @@ from company import Company
 from time import time
 
 
-class MultiStepLSTMCompany(Company) :
+class MultiStepLSTMCompany(Company):
     def __init__(self, name, train_start_date_string, train_end_test_start_date_string, test_end_date_string,
                  n_lag, n_seq, n_epochs, n_batch, n_neurons):
         Company.__init__(self, name)
@@ -31,54 +31,35 @@ class MultiStepLSTMCompany(Company) :
         self.time_taken_to_train = 0
 
     def preprocess_data(self):
+        data_series = self.train_raw_series.append(self.test_raw_series)
+        display("data series", data_series)
+        diff_series = self.difference(data_series)
+        # display("difference series", diff_series)
+        diff_values = diff_series.values
+        diff_values = diff_values.reshape(len(diff_values), 1)
 
-        # transform data to be stationary
-        train_diff_series = self.difference(self.train_raw_series.values, "train")
-        train_diff_values = train_diff_series.values
-        train_diff_values = train_diff_values.reshape(len(train_diff_values), 1)
+        supervised_pd = self.timeseries_to_supervised(diff_values, self.n_lag, self.n_seq)
+        # display("supervised", supervised_pd)
 
-        test_diff_series = self.difference(self.test_raw_series.values, "test")
-        test_diff_values = test_diff_series.values
-        test_diff_values = test_diff_values.reshape(len(test_diff_values), 1)
+        cutoff = len(self.train_raw_series) - self.n_seq - 1
+        train_supervised_values = supervised_pd.values[:cutoff - self.n_lag + 1]
+        # display("train supervised", train_supervised_values)
+        test_supervised_values = supervised_pd.values[cutoff + self.n_seq - self.n_lag:]
+        # display("test supervised", test_supervised_values)
+        self.scaler, scaled_train_supervised, scaled_test_supervised = self.scale(train_supervised_values,
+                                                                                  test_supervised_values)
+        display("scaled train supervised", scaled_train_supervised)
+        display("scaled test supervised", scaled_test_supervised)
 
-        # transform the scale of the data
-        scaler, train_scaled, test_scaled = self.scale(train_diff_values, test_diff_values)
-        train_scaled = train_scaled.reshape(len(train_scaled), 1)
-        test_scaled = test_scaled.reshape(len(test_scaled), 1)
-        self.scaler = scaler
-
-        # transform data to be supervised learning
-        train_supervised_pd = self.timeseries_to_supervised(train_scaled, self.n_lag, self.n_seq)
-
-        train = train_supervised_pd.values
-
-        # removes first row because it is not relevant
-        test_supervised_pd = self.timeseries_to_supervised(test_scaled, self.n_lag, self.n_seq)
-        test = test_supervised_pd.values
-        # display("raw train", self.train_raw_series)
-        # display("raw test", self.test_raw_series)
-        # display("diff train", train_diff_values)
-        # display("scaled train", train_scaled)
-        # display("supervised train", train_supervised_pd)
-
-        # display("diff test", test_diff_values)
-        # display("scaled test", test_scaled)
-        # display("supervised test", test_supervised_pd)
-        return train, test
+        return scaled_train_supervised, scaled_test_supervised
 
     # create a differenced series
-    def difference(self, series, source="train"):
-        diff = list()
-        # First item is special case because we use the difference of the last training pair to predict the first test price
-        if source == "test":
-            diff.append(self.train_raw_series.values[-1] - self.train_raw_series.values[-2])
-            diff.append(self.test_raw_series.values[0] - self.train_raw_series.values[-1])
-
-        for i in range(1, len(series)):
-            value = series[i] - series[i - 1]
-            diff.append(value)
-
-        return pd.Series(diff)
+    def difference(self, series):
+        diff_series = pd.Series()
+        index = series.index
+        for i in range(1, len(index)):
+            diff_series.at[index[i]] = series[index[i]] - series[index[i - 1]]
+        return diff_series
 
     # convert time series into supervised learning problem
     def timeseries_to_supervised(self, data, n_in=1, n_out=1, dropnan=True):
@@ -105,17 +86,22 @@ class MultiStepLSTMCompany(Company) :
         return agg
 
     # scale train and test data to [-1, 1]
-    def scale(self, train, test):
-        # fit scaler
-        # display(train)
+    def scale(self, train_raw, test_raw):
+        # fit scaler with 1 Dimensional array data
         scaler = MinMaxScaler(feature_range=(-1, 1))
-        scaler = scaler.fit(train)
+        scaler_train_data = train_raw.reshape(train_raw.size, 1)
+        # display("fit scaler with train data", scaler_train_data)
+        scaler = scaler.fit(scaler_train_data)
         # transform train
-        train = train.reshape(train.shape[0], train.shape[1])
-        train_scaled = scaler.transform(train)
+        train_scaled = scaler.transform(scaler_train_data)
+        train_scaled = train_scaled.reshape(train_raw.shape[0], train_raw.shape[1])
+        # display("train_scaled", train_scaled)
         # transform test
-        test = test.reshape(test.shape[0], test.shape[1])
-        test_scaled = scaler.transform(test)
+        test_data = test_raw.reshape(test_raw.size, 1)
+        test_scaled = scaler.transform(test_data)
+        test_scaled = test_scaled.reshape(test_raw.shape[0], test_raw.shape[1])
+        # display("test_scaled", test_scaled)
+
         return scaler, train_scaled, test_scaled
 
     # fit the model
@@ -123,19 +109,25 @@ class MultiStepLSTMCompany(Company) :
         print("Fitting the model")
         start_time = time()
         self.lstm_model = self.fit_lstm(self.train_scaled)
-        # forecast the entire training dataset to build up state for forecasting
-        train_reshaped = self.train_scaled[:, 0].reshape(len(self.train_scaled), 1, 1)
-        self.lstm_model.predict(train_reshaped, batch_size=self.n_batch)
+        self.reset()
         self.time_taken_to_train = time() - start_time
         print("Finished fitting the model, time taken to train: %.1f s" % self.time_taken_to_train)
+
+    def reset(self):
+        # forecast the entire training dataset to build up state for forecasting
+        # reshape training into [samples, timesteps, features]
+        self.lstm_model.reset_states()
+        X, y = self.train_scaled[:, 0:self.n_lag], self.train_scaled[:, self.n_lag:]
+        X = X.reshape(X.shape[0], 1, X.shape[1])
+        self.lstm_model.predict(X, batch_size=self.n_batch)
 
     # fit an LSTM network to training data
     def fit_lstm(self, train):
         # reshape training into [samples, timesteps, features]
         X, y = train[:, 0:self.n_lag], train[:, self.n_lag:]
         X = X.reshape(X.shape[0], 1, X.shape[1])
-        display("train data", X)
-        display("test data", y)
+        display("train X data", X)
+        display("train y data", y)
         # design network
         model = Sequential()
         model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]), stateful=True))
@@ -203,12 +195,12 @@ class MultiStepLSTMCompany(Company) :
 
     # make a one-step forecast standalone
     def forecast_lstm_one_step(self):
+        self.reset()
         predictions = pd.Series()
         train_index = self.train_raw_series.index
 
-        X = np.array([self.train_scaled[len(self.train_scaled) - 1, -1]])
+        X = np.array(self.train_scaled[len(self.train_scaled) - 1, self.n_seq:])
         print("X: ", X, "y: ?")
-
         pred = self.forecast_lstm(X)
         # store forecast
         predictions.at[self.date_by_adding_business_days(train_index[-1], 1)] = pred
@@ -220,6 +212,7 @@ class MultiStepLSTMCompany(Company) :
 
     # evaluate the persistence model
     def predict(self):
+        self.reset()
         # walk-forward validation on the test data
         predictions = pd.Series()
         # Index is datetime
@@ -233,7 +226,7 @@ class MultiStepLSTMCompany(Company) :
             # store forecast
             predictions.at[test_index[i]] = pred
 
-        display("predictions before inverse transform", predictions)
+        # display("predictions before inverse transform", predictions)
         # inverse transform
         predictions = self.inverse_transform(self.train_raw_series.append(self.test_raw_series), predictions,
                                              len(self.test_raw_series))
@@ -249,13 +242,13 @@ class MultiStepLSTMCompany(Company) :
         test_values = self.test_raw_series.values
         actual = list()
         for i in range(len(test_values) - self.n_seq + 1):
-            next_days_values = test_values[i + self.n_lag - 1: i + self.n_seq]
+            next_days_values = test_values[i: i + self.n_seq]
             actual.append(next_days_values)
         actual = np.array(actual)
-        display("actual", actual)
+        # display("actual", actual)
 
         predictions = np.array(predictions.tolist())
-        display("predicted", predictions)
+        # display("predicted", predictions)
 
         if metric == "rmse":
             rmses = list()
@@ -293,7 +286,7 @@ class MultiStepLSTMCompany(Company) :
 
                     if true_trend == predicted_trend:
                         correct_counts += 1
-                    print("Price 1 day before", price_1_day_before)
+                    print("Price 1 day before: ", price_1_day_before)
                     print("Actual price: ", actual, " | Predicted price: ", predictions[j, i])
                     print("Actual trend: ", true_trend, " | Predicted trend: ", predicted_trend)
                     # next day
@@ -310,12 +303,18 @@ class MultiStepLSTMCompany(Company) :
     def inverse_difference(self, last_ob, forecast):
         # invert first forecast
         inverted = list()
-        inverted.append(forecast[0] + last_ob)
+        new = forecast[0] + last_ob
+        inverted.append(new)
+        print("Inverse difference Pred: ", forecast[0], "  + Reference Price:", last_ob, " = ", new)
+        last_ob = new
         # propagate difference forecast using inverted first value
         for i in range(1, len(forecast)):
-            inverted.append(forecast[i] + inverted[i - 1])
+            new = forecast[i] + inverted[i - 1]
+            inverted.append(new)
+            print("Inverse difference Pred: ", forecast[i], "  + Reference Price:", last_ob, " = ", new)
+            last_ob = new
 
-        print("Inverse difference Pred: ", forecast, "  + Reference Price:", last_ob, " = ", inverted)
+        print("Final inverted values: ", inverted)
         return inverted
 
     # inverse data transform on forecasts
@@ -326,10 +325,10 @@ class MultiStepLSTMCompany(Company) :
         for i in range(len(predictions)):
             # create array from forecast
             pred = array(predictions[i])
-            pred = pred.reshape(1, len(pred))
+            pred = pred.reshape(len(pred), 1)
             # invert scaling
             inv_scale = self.scaler.inverse_transform(pred)
-            inv_scale = inv_scale[0, :]
+            # inv_scale = inv_scale[0, :]
             print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
             # invert differencing
             # -1 to get the t-1 price
