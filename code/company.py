@@ -7,17 +7,23 @@ import holidays
 from sklearn.metrics import mean_squared_error
 from alpha_vantage.timeseries import TimeSeries
 
-
 class Company(object):
     def __init__(self, name):
         self.name = name
         # Create object to request data from Alpha Vantage
         self.time_series = TimeSeries(key='3OMS720IM6CRC3SV', output_format='pandas', indexing_type='date')
-        data, metadata = self.time_series.get_daily_adjusted(symbol=name, outputsize='full')
+
+        while True:
+            try:
+                price_series, metadata = self.time_series.get_daily_adjusted(symbol=name, outputsize='full')
+                break
+            except:
+                print("Retrying to download price series")
+                pass
+
         # Convert index of the DataFrame which is in the date string format into datetime
-        data.index = pd.to_datetime(data.index)
-        self.converted_dates = data.index  # DateTimeIndex64
-        self.share_prices_series = data["5. adjusted close"]  # Series
+        price_series.index = pd.to_datetime(price_series.index)
+        self.share_prices_series = price_series["5. adjusted close"]  # Series
         self.us_holidays = holidays.UnitedStates()
     
     def convert_date_string_to_datetime(self, date_string):
@@ -37,8 +43,8 @@ class Company(object):
             business_days_to_add -= 1
         return current_date
     
-    # Get share prices within the range
-    def get_share_prices(self, start_date_string=None, end_date_string=None, start_delay=None):
+    # Get share prices or technical indidcators within the range
+    def get_filtered_series(self, series, start_date_string=None, end_date_string=None, start_delay=None):
         # Check whether there needs "days" delay in the returned share prices
         if start_delay != None:
             start_date = self.date_by_adding_business_days(
@@ -46,9 +52,9 @@ class Company(object):
         else:
             start_date = self.convert_date_string_to_datetime(start_date_string)
         end_date = self.convert_date_string_to_datetime(end_date_string)
-        relevant_share_prices = self.share_prices_series[
-            (self.share_prices_series.index >= start_date) & (self.share_prices_series.index <= end_date)]
-        return relevant_share_prices
+        relevant_series_range = series[
+            (series.index >= start_date) & (series.index <= end_date)]
+        return relevant_series_range
         
     # plot function for children classes, if run by parent, error would happen
     def plot(self, predictions):

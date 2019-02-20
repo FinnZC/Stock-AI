@@ -19,9 +19,14 @@ class MultiStepLSTMCompany(Company):
         Company.__init__(self, name)
         self.scaler = None
         self.lstm_model = None
-        self.train_raw_series = self.get_share_prices(train_start_date_string, train_end_test_start_date_string)
-        self.test_raw_series = self.get_share_prices(train_end_test_start_date_string, test_end_date_string,
-                                                     start_delay=1)
+        self.train_raw_series = self.get_filtered_series(self.share_prices_series,
+                                                         train_start_date_string, train_end_test_start_date_string)
+        self.test_raw_series = self.get_filtered_series(self.share_prices_series, train_end_test_start_date_string,
+                                                        test_end_date_string, start_delay=1)
+
+        self.train_start_date_string = train_start_date_string
+        self.train_end_test_start_date_string = train_end_test_start_date_string
+        self.test_end_date_string = test_end_date_string
         self.n_lag = n_lag
         self.n_seq = n_seq
         self.n_epochs = n_epochs
@@ -29,6 +34,7 @@ class MultiStepLSTMCompany(Company):
         self.n_neurons = n_neurons
         self.train_scaled, self.test_scaled = self.preprocess_data()
         self.time_taken_to_train = 0
+
 
     def preprocess_data(self):
         data_series = self.train_raw_series.append(self.test_raw_series)
