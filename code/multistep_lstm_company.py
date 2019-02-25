@@ -32,9 +32,15 @@ class MultiStepLSTMCompany(Company):
         self.n_epochs = n_epochs
         self.n_batch = n_batch
         self.n_neurons = n_neurons
-        self.train_scaled, self.test_scaled = self.preprocess_data()
+        self.train_scaled, self.test_scaled = None, None
+        self.preprocess_data()
         self.time_taken_to_train = 0
 
+    def update_train_test_set(self, start_train, end_train_start_test, end_test):
+        self.train_start_date_string = start_train
+        self.train_end_test_start_date_string = end_train_start_test
+        self.test_end_date_string = end_test
+        self.preprocess_data()
 
     def preprocess_data(self):
         data_series = self.train_raw_series.append(self.test_raw_series)
@@ -57,7 +63,7 @@ class MultiStepLSTMCompany(Company):
         display("scaled train supervised", scaled_train_supervised)
         display("scaled test supervised", scaled_test_supervised)
 
-        return scaled_train_supervised, scaled_test_supervised
+        self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
 
     # create a differenced series
     def difference(self, series):
@@ -69,20 +75,23 @@ class MultiStepLSTMCompany(Company):
 
     # convert time series into supervised learning problem
     def timeseries_to_supervised(self, data, n_in=1, n_out=1, dropnan=True):
-        n_vars = 1 if type(data) is list else data.shape[1]
+        print("data type", type(data))
+        n_vars = 1 if (type(data) is list or isinstance(data, pd.Series)) else data.shape[1]
         df = pd.DataFrame(data)
         cols, names = list(), list()
+        column_names = list(df.columns.values)
         # input sequence (t-n, ... t-1)
         for i in range(n_in, 0, -1):
             cols.append(df.shift(i))
-            names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)]
+            names += [('%s(t-%d)' % (column_names[j], i)) for j in range(n_vars)]
         # forecast sequence (t, t+1, ... t+n)
         for i in range(0, n_out):
             cols.append(df.shift(-i))
             if i == 0:
-                names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
+                names += [('%s(t)' % (column_names[j])) for j in range(n_vars)]
             else:
-                names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
+                names += [('%s(t+%d)' % (column_names[j], i)) for j in range(n_vars)]
+
         # put it all together
         agg = pd.concat(cols, axis=1)
         agg.columns = names

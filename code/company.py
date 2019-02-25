@@ -6,6 +6,8 @@ import math
 import holidays
 from sklearn.metrics import mean_squared_error
 from alpha_vantage.timeseries import TimeSeries
+import time
+import pickle
 
 class Company(object):
     def __init__(self, name):
@@ -19,11 +21,13 @@ class Company(object):
                 break
             except:
                 print("Retrying to download price series")
+                time.sleep(30)
                 pass
 
         # Convert index of the DataFrame which is in the date string format into datetime
         price_series.index = pd.to_datetime(price_series.index)
         self.share_prices_series = price_series["5. adjusted close"]  # Series
+        self.share_prices_series.name = "Share Price"
         self.us_holidays = holidays.UnitedStates()
     
     def convert_date_string_to_datetime(self, date_string):
@@ -126,3 +130,29 @@ class Company(object):
                 price_1_day_before = self.test_raw_series[index[i]]
             
             return correct_counts/len(self.test_raw_series)
+
+    def save_lstm_model(self):
+        file_name = self.name + "_nseq_"+ str(self.n_seq) \
+                    + "_nlag_" + str(self.n_lag) + "_ind_" \
+                    + "".join(self.input_tech_indicators_list) \
+                    + "_train_" + self.train_start_date_string \
+                    + "_trainendteststart_" + self.train_end_test_start_date_string \
+                    + "_testend_" + self.test_end_date_string + ".h5"
+        file_name = file_name.replace("/", "-")
+        self.lstm_model.save("models/" + file_name)
+
+    def save_object(self):
+        file_name = self.name + "_nseq_"+ str(self.n_seq) \
+                    + "_nlag_" + str(self.n_lag) + "_ind_" \
+                    + "".join(self.input_tech_indicators_list) \
+                    + "_train_" + self.train_start_date_string \
+                    + "_trainendteststart_" + self.train_end_test_start_date_string \
+                    + "_testend_" + self.test_end_date_string + '.pkl'
+        file_name = file_name.replace("/", "-")
+        temp_model = self.lstm_model
+        self.lstm_model = None
+        # don't save the Keras model
+        with open("obj/" + file_name, 'wb') as f:
+            pickle.dump(self.__dict__, f, pickle.HIGHEST_PROTOCOL)
+
+        self.lstm_model = temp_model
