@@ -10,20 +10,24 @@ from keras.layers import LSTM
 from sklearn.metrics import mean_squared_error
 from numpy import array
 from company import Company
+from time import sleep
 from time import time
+import pickle
 
 
 class MultiStepLSTMCompany(Company):
     def __init__(self, name, train_start_date_string, train_end_test_start_date_string, test_end_date_string,
-                 n_lag, n_seq, n_epochs, n_batch, n_neurons):
+                 n_lag, n_seq, n_epochs, n_batch, n_neurons, tech_indicators=[]):
         Company.__init__(self, name)
         self.scaler = None
         self.lstm_model = None
-        self.train_raw_series = self.get_filtered_series(self.share_prices_series,
-                                                         train_start_date_string, train_end_test_start_date_string)
-        self.test_raw_series = self.get_filtered_series(self.share_prices_series, train_end_test_start_date_string,
-                                                        test_end_date_string, start_delay=1)
-
+        self.train_scaled, self.test_scaled = None, None
+        self.supervised_pd = None
+        self.raw_pd = None
+        if tech_indicators == "all":
+            self.input_tech_indicators_list = self.all_tech_indicators
+        else:
+            self.input_tech_indicators_list = tech_indicators
         self.train_start_date_string = train_start_date_string
         self.train_end_test_start_date_string = train_end_test_start_date_string
         self.test_end_date_string = test_end_date_string
@@ -32,9 +36,88 @@ class MultiStepLSTMCompany(Company):
         self.n_epochs = n_epochs
         self.n_batch = n_batch
         self.n_neurons = n_neurons
-        self.train_scaled, self.test_scaled = None, None
-        self.preprocess_data()
         self.time_taken_to_train = 0
+
+        self.train_raw_series = self.get_filtered_series(self.share_prices_series,
+                                                         self.train_start_date_string,
+                                                         self.train_end_test_start_date_string)
+        self.test_raw_series = self.get_filtered_series(self.share_prices_series,
+                                                        self.train_end_test_start_date_string,
+                                                        self.test_end_date_string, start_delay=1)
+        self.preprocess_data()
+
+    def add_tech_indicators_dataframe(self, price_series, indicators):
+        combined = price_series
+        for ind in indicators:
+            print("ind", ind)
+            while True:  # try again until success
+                try:
+                    ind_series = self.get_indicator(ind)
+                    combined = pd.concat([combined, ind_series], axis=1)
+                    break
+                except KeyError:
+                    # Could be that API has reached its limit
+                    print("Retrying to download indicator ", ind)
+                    sleep(5)
+                    pass
+
+        return combined
+
+    def get_indicator(self, ind_name):
+        if self.raw_pd is not None:
+            if ind_name.upper() not in self.raw_pd.columns:
+                print("Downloading ", ind_name)
+                data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
+                data.index = pd.to_datetime(data.index)
+            else:
+                print("Exist in raw_pd ", ind_name)
+                data = self.raw_pd[ind_name.upper()]
+        else:
+            print("Downloading ", ind_name)
+            data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
+            data.index = pd.to_datetime(data.index)
+        return data
+
+
+    def preprocess_data(self):
+        #display("train raw series", self.train_raw_series)
+        #display("test raw series", self.test_raw_series)
+        price_series = self.share_prices_series
+        #display("price data series", len(price_series), price_series)
+        if len(self.input_tech_indicators_list) > 0:
+            # add additional technical indicators
+            combined = self.add_tech_indicators_dataframe(price_series, self.input_tech_indicators_list)
+        else:
+            combined = price_series
+
+        self.raw_pd = combined
+
+        supervised_pd = self.timeseries_to_supervised(combined, self.n_lag, self.n_seq)
+        # display("supervised", supervised_pd)
+        # delete unnecessary variables for prediction except price (should be var1)
+        supervised_pd = self.drop_irrelevant_y_var(supervised_pd)
+        #display("supervised_pd original", supervised_pd)
+        supervised_pd = self.difference(supervised_pd)
+        #display("supervised_pd after differencing", supervised_pd)
+        self.supervised_pd = supervised_pd
+
+        supervised_pd = self.get_filtered_series(self.supervised_pd, self.train_start_date_string, self.test_end_date_string)
+        display("supervised filtered pd ", supervised_pd)
+        cutoff = len(self.train_raw_series)
+        train_supervised_values = supervised_pd.values[:cutoff]
+        # display("train supervised values", train_supervised_values)
+        test_supervised_values = supervised_pd.values[cutoff:]
+        # display("test supervised values", test_supervised_values)
+
+        #display("filtered train values", supervised_pd)
+
+        self.scaler, scaled_train_supervised, scaled_test_supervised = self.scale(train_supervised_values,
+                                                                                  test_supervised_values)
+        #display("scaled train supervised", scaled_train_supervised)
+        #display("scaled test supervised", scaled_test_supervised)
+
+        self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
+
 
     def update_train_test_set(self, start_train, end_train_start_test, end_test):
         self.train_start_date_string = start_train
@@ -42,40 +125,12 @@ class MultiStepLSTMCompany(Company):
         self.test_end_date_string = end_test
         self.preprocess_data()
 
-    def preprocess_data(self):
-        data_series = self.train_raw_series.append(self.test_raw_series)
-        display("data series", data_series)
-        diff_series = self.difference(data_series)
-        # display("difference series", diff_series)
-        diff_values = diff_series.values
-        diff_values = diff_values.reshape(len(diff_values), 1)
-
-        supervised_pd = self.timeseries_to_supervised(diff_values, self.n_lag, self.n_seq)
-        # display("supervised", supervised_pd)
-
-        cutoff = len(self.train_raw_series) - self.n_seq - 1
-        train_supervised_values = supervised_pd.values[:cutoff - self.n_lag + 1]
-        # display("train supervised", train_supervised_values)
-        test_supervised_values = supervised_pd.values[cutoff + self.n_seq - self.n_lag:]
-        # display("test supervised", test_supervised_values)
-        self.scaler, scaled_train_supervised, scaled_test_supervised = self.scale(train_supervised_values,
-                                                                                  test_supervised_values)
-        display("scaled train supervised", scaled_train_supervised)
-        display("scaled test supervised", scaled_test_supervised)
-
-        self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
-
     # create a differenced series
-    def difference(self, series):
-        diff_series = pd.Series()
-        index = series.index
-        for i in range(1, len(index)):
-            diff_series.at[index[i]] = series[index[i]] - series[index[i - 1]]
-        return diff_series
+    def difference(self, pd):
+        return pd.diff().dropna()
 
     # convert time series into supervised learning problem
     def timeseries_to_supervised(self, data, n_in=1, n_out=1, dropnan=True):
-        print("data type", type(data))
         n_vars = 1 if (type(data) is list or isinstance(data, pd.Series)) else data.shape[1]
         df = pd.DataFrame(data)
         cols, names = list(), list()
@@ -100,21 +155,27 @@ class MultiStepLSTMCompany(Company):
             agg.dropna(inplace=True)
         return agg
 
+    def drop_irrelevant_y_var(self, pd):
+        columns_to_drop = list()
+        for i in range(len(self.input_tech_indicators_list)):
+            columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t)")
+
+        for i in range(len(self.input_tech_indicators_list)):
+            for j in range(1, self.n_seq):
+                columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t+%d)" % j)
+        return pd.drop(columns_to_drop, axis=1)
+
     # scale train and test data to [-1, 1]
     def scale(self, train_raw, test_raw):
         # fit scaler with 1 Dimensional array data
         scaler = MinMaxScaler(feature_range=(-1, 1))
-        scaler_train_data = train_raw.reshape(train_raw.size, 1)
         # display("fit scaler with train data", scaler_train_data)
-        scaler = scaler.fit(scaler_train_data)
+        scaler = scaler.fit(train_raw)
         # transform train
-        train_scaled = scaler.transform(scaler_train_data)
-        train_scaled = train_scaled.reshape(train_raw.shape[0], train_raw.shape[1])
+        train_scaled = scaler.transform(train_raw)
         # display("train_scaled", train_scaled)
         # transform test
-        test_data = test_raw.reshape(test_raw.size, 1)
-        test_scaled = scaler.transform(test_data)
-        test_scaled = test_scaled.reshape(test_raw.shape[0], test_raw.shape[1])
+        test_scaled = scaler.transform(test_raw)
         # display("test_scaled", test_scaled)
 
         return scaler, train_scaled, test_scaled
@@ -127,6 +188,8 @@ class MultiStepLSTMCompany(Company):
         self.reset()
         self.time_taken_to_train = time() - start_time
         print("Finished fitting the model, time taken to train: %.1f s" % self.time_taken_to_train)
+        print("Saving model")
+        self.save()
 
     def reset(self):
         # forecast the entire training dataset to build up state for forecasting
@@ -139,7 +202,8 @@ class MultiStepLSTMCompany(Company):
     # fit an LSTM network to training data
     def fit_lstm(self, train):
         # reshape training into [samples, timesteps, features]
-        X, y = train[:, 0:self.n_lag], train[:, self.n_lag:]
+        X, y = train[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
+               train[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
         X = X.reshape(X.shape[0], 1, X.shape[1])
         display("train X data", X)
         display("train y data", y)
@@ -160,6 +224,7 @@ class MultiStepLSTMCompany(Company):
         X = X.reshape(1, 1, len(X))
         # make forecast
         forecast = self.lstm_model.predict(X, batch_size=self.n_batch)
+        # display("forecast", forecast)
         # convert to array
         return [x for x in forecast[0, :]]
 
@@ -208,6 +273,15 @@ class MultiStepLSTMCompany(Company):
         plt.title("Stock price prediction for " + self.name)
         plt.show()
 
+    def reset(self):
+        # forecast the entire training dataset to build up state for forecasting
+        # reshape training into [samples, timesteps, features]
+        self.lstm_model.reset_states()
+        X, y = self.train_scaled[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
+               self.train_scaled[:,self.n_lag * (len(self.input_tech_indicators_list) + 1):]
+        X = X.reshape(X.shape[0], 1, X.shape[1])
+        self.lstm_model.predict(X, batch_size=self.n_batch)
+
     # make a one-step forecast standalone
     def forecast_lstm_one_step(self):
         self.reset()
@@ -232,14 +306,18 @@ class MultiStepLSTMCompany(Company):
         predictions = pd.Series()
         # Index is datetime
         test_index = self.test_raw_series.index
+        print("index", test_index)
         for i in range(len(self.test_scaled)):
             # make multi-step forecast
-            X, y = self.test_scaled[i, 0:self.n_lag], self.test_scaled[i, self.n_lag:]
+            X, y = self.test_scaled[i, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
+                   self.test_scaled[i, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
             print("X: ", X, "y: ", y)
             pred = self.forecast_lstm(X)
             print("Prediction: ", pred)
             # store forecast
+            print(test_index[i])
             predictions.at[test_index[i]] = pred
+            # display(predictions)
 
         # display("predictions before inverse transform", predictions)
         # inverse transform
@@ -249,12 +327,14 @@ class MultiStepLSTMCompany(Company):
         display(predictions)
         return predictions
 
+
+
     # evaluate the RMSE for each forecast time step
     def score(self, metric, predictions):
         # convert actual tests and predictions to an appropriate list or arrays
         # construct list of rows
         # first item is test data for the next days, hence not taken into account to measure the prediction
-        test_values = self.test_raw_series.values
+        test_values = self.test_raw_series.values[:-self.n_seq + 1 if self.n_seq > 1 else len(self.test_raw_series)]
         actual = list()
         for i in range(len(test_values) - self.n_seq + 1):
             next_days_values = test_values[i: i + self.n_seq]
@@ -339,13 +419,14 @@ class MultiStepLSTMCompany(Company):
         pred_index = predictions.index
         for i in range(len(predictions)):
             # create array from forecast
-            pred = array(predictions[i])
-            pred = pred.reshape(len(pred), 1)
+            pred = array([0 for i in range(self.n_lag * (len(self.input_tech_indicators_list) + 1))] + predictions[i])
+            pred = pred.reshape(1, len(pred))
+            # display("pred with place holders", pred)
             # invert scaling
-            inv_scale = self.scaler.inverse_transform(pred)
+            inv_scale = self.scaler.inverse_transform(pred)[0, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
             # inv_scale = inv_scale[0, :]
             print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
-            # invert differencing
+                        # invert differencing
             # -1 to get the t-1 price
             index = len(series) - n_test + i - 1
             last_ob = series.values[index]
@@ -353,3 +434,37 @@ class MultiStepLSTMCompany(Company):
             # store
             inverted_predictions.at[pred_index[i]] = inv_diff
         return inverted_predictions
+
+    def save_lstm_model(self):
+        file_name = self.name + "_nlag_" + str(self.n_lag) \
+                    + "_nseq_" + str(self.n_seq) + "_ind_" \
+                    + "".join(self.input_tech_indicators_list) \
+                    + "_train_" + self.train_start_date_string \
+                    + "_trainendteststart_" + self.train_end_test_start_date_string \
+                    + "_testend_" + self.test_end_date_string + ".h5"
+        file_name = file_name.replace("/", "-")
+        self.lstm_model.save("models/" + file_name)
+
+    def save_object(self):
+        file_name = self.name + "_nlag_" + str(self.n_lag) \
+                    + "_nseq_" + str(self.n_seq) + "_ind_" \
+                    + "".join(self.input_tech_indicators_list) \
+                    + "_train_" + self.train_start_date_string \
+                    + "_trainendteststart_" + self.train_end_test_start_date_string \
+                    + "_testend_" + self.test_end_date_string + ".pkl"
+        file_name = file_name.replace("/", "-")
+        temp_model = self.lstm_model
+        temp_holiday = self.us_holidays
+        # not pickable so reload these at a later stage
+        self.lstm_model = None
+        self.us_holidays = None
+        # don't save the Keras model
+        with open("obj/" + file_name, 'wb') as f:
+            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+
+        self.lstm_model = temp_model
+        self.us_holidays = temp_holiday
+
+    def save(self):
+        self.save_lstm_model()
+        self.save_object()
