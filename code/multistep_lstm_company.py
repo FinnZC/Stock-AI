@@ -56,8 +56,8 @@ class MultiStepLSTMCompany(Company):
                     break
                 except KeyError:
                     # Could be that API has reached its limit
-                    print("Retrying to download indicator ", ind)
-                    sleep(5)
+                    print("Retrying to download indicator ", ind, " due to API limit")
+                    sleep(20)
                     pass
 
         return combined
@@ -68,6 +68,7 @@ class MultiStepLSTMCompany(Company):
                 print("Downloading ", ind_name)
                 data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
                 data.index = pd.to_datetime(data.index)
+                data.rename(columns={data.columns[0]: ind_name.upper()}, inplace=True)
             else:
                 print("Add from existing raw_pd ", ind_name)
                 data = self.raw_pd[ind_name.upper()]
@@ -75,6 +76,8 @@ class MultiStepLSTMCompany(Company):
             print("Downloading ", ind_name)
             data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
             data.index = pd.to_datetime(data.index)
+            data.rename(columns={data.columns[0]: ind_name.upper()}, inplace=True)
+
         return data
 
 
@@ -85,6 +88,8 @@ class MultiStepLSTMCompany(Company):
 
     def preprocess_data(self):
         print("Preprocessing the data")
+        start_time = time()
+
         #display("train raw series", self.train_raw_series)
         #display("test raw series", self.test_raw_series)
         price_series = self.share_prices_series
@@ -122,6 +127,8 @@ class MultiStepLSTMCompany(Company):
         #display("scaled test supervised", scaled_test_supervised)
 
         self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
+        print("Preprocessed data in ", time() - start_time, "s")
+
 
     def update_train_test_set(self, start_train, end_train_start_test, end_test):
         print("Update the training and testing set with the specified dates: "
@@ -170,6 +177,7 @@ class MultiStepLSTMCompany(Company):
         for i in range(len(self.input_tech_indicators_list)):
             for j in range(1, self.n_seq):
                 columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t+%d)" % j)
+        display(pd)
         return pd.drop(columns_to_drop, axis=1)
 
     # scale train and test data to [-1, 1]
@@ -213,8 +221,8 @@ class MultiStepLSTMCompany(Company):
         X, y = train[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                train[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
         X = X.reshape(X.shape[0], 1, X.shape[1])
-        display("train X data", X)
-        display("train y data", y)
+        print("train X data", X)
+        print("train y data", y)
         # design network
         model = Sequential()
         model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]), stateful=True))
@@ -345,11 +353,11 @@ class MultiStepLSTMCompany(Company):
             next_days_values = test_values[i: i + self.n_seq]
             actual.append(next_days_values)
         actual = np.array(actual)
-        display("actual", actual)
+        print("actual", actual)
 
         predictions = np.array(predictions.tolist())[:- self.n_seq + 1]
 
-        display("predicted", predictions)
+        print("predicted", predictions)
 
         if metric == "rmse":
             rmses = list()

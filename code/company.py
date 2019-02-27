@@ -26,7 +26,7 @@ class Company(object):
             except KeyError:
                 # Could be that API has reached its limit
                 print("Retrying to download price series")
-                sleep(5)
+                sleep(20)
                 pass
         # Convert index of the DataFrame which is in the date string format into datetime
         price_series.index = pd.to_datetime(price_series.index)
