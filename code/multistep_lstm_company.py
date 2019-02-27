@@ -49,7 +49,6 @@ class MultiStepLSTMCompany(Company):
     def add_tech_indicators_dataframe(self, price_series, indicators):
         combined = price_series
         for ind in indicators:
-            print("ind", ind)
             while True:  # try again until success
                 try:
                     ind_series = self.get_indicator(ind)
@@ -70,7 +69,7 @@ class MultiStepLSTMCompany(Company):
                 data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
                 data.index = pd.to_datetime(data.index)
             else:
-                print("Exist in raw_pd ", ind_name)
+                print("Add from existing raw_pd ", ind_name)
                 data = self.raw_pd[ind_name.upper()]
         else:
             print("Downloading ", ind_name)
@@ -79,7 +78,13 @@ class MultiStepLSTMCompany(Company):
         return data
 
 
+    def update_raw_pd(self):
+        print("Updating all series: share prices", ", ".join(self.input_tech_indicators_list))
+        self.raw_pd = None
+        self.preprocess_data()
+
     def preprocess_data(self):
+        print("Preprocessing the data")
         #display("train raw series", self.train_raw_series)
         #display("test raw series", self.test_raw_series)
         price_series = self.share_prices_series
@@ -99,10 +104,10 @@ class MultiStepLSTMCompany(Company):
         #display("supervised_pd original", supervised_pd)
         supervised_pd = self.difference(supervised_pd)
         #display("supervised_pd after differencing", supervised_pd)
-        self.supervised_pd = supervised_pd
 
-        supervised_pd = self.get_filtered_series(self.supervised_pd, self.train_start_date_string, self.test_end_date_string)
-        display("supervised filtered pd ", supervised_pd)
+        supervised_pd = self.get_filtered_series(supervised_pd, self.train_start_date_string, self.test_end_date_string)
+        self.supervised_pd = supervised_pd
+        #display("supervised filtered pd ", supervised_pd)
         cutoff = len(self.train_raw_series)
         train_supervised_values = supervised_pd.values[:cutoff]
         # display("train supervised values", train_supervised_values)
@@ -118,8 +123,10 @@ class MultiStepLSTMCompany(Company):
 
         self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
 
-
     def update_train_test_set(self, start_train, end_train_start_test, end_test):
+        print("Update the training and testing set with the specified dates: "
+              "train data from %s to %s and test data from %s to %s"
+              % (start_train, end_train_start_test, end_train_start_test, end_test))
         self.train_start_date_string = start_train
         self.train_end_test_start_date_string = end_train_start_test
         self.test_end_date_string = end_test
@@ -188,12 +195,13 @@ class MultiStepLSTMCompany(Company):
         self.reset()
         self.time_taken_to_train = time() - start_time
         print("Finished fitting the model, time taken to train: %.1f s" % self.time_taken_to_train)
-        print("Saving model")
+        print("Saving object and model")
         self.save()
 
     def reset(self):
         # forecast the entire training dataset to build up state for forecasting
         # reshape training into [samples, timesteps, features]
+        print("Reseting the lstm model")
         self.lstm_model.reset_states()
         X, y = self.train_scaled[:, 0:self.n_lag], self.train_scaled[:, self.n_lag:]
         X = X.reshape(X.shape[0], 1, X.shape[1])
@@ -311,11 +319,11 @@ class MultiStepLSTMCompany(Company):
             # make multi-step forecast
             X, y = self.test_scaled[i, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                    self.test_scaled[i, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
-            print("X: ", X, "y: ", y)
+
             pred = self.forecast_lstm(X)
-            print("Prediction: ", pred)
+            print("X: ", X, "y: ", y, " pred: ", pred)
+
             # store forecast
-            print(test_index[i])
             predictions.at[test_index[i]] = pred
             # display(predictions)
 
@@ -324,26 +332,24 @@ class MultiStepLSTMCompany(Company):
         predictions = self.inverse_transform(self.train_raw_series.append(self.test_raw_series), predictions,
                                              len(self.test_raw_series))
         print("Predictions after inverse transform")
-        display(predictions)
         return predictions
-
 
 
     # evaluate the RMSE for each forecast time step
     def score(self, metric, predictions):
         # convert actual tests and predictions to an appropriate list or arrays
         # construct list of rows
-        # first item is test data for the next days, hence not taken into account to measure the prediction
-        test_values = self.test_raw_series.values[:-self.n_seq + 1 if self.n_seq > 1 else len(self.test_raw_series)]
+        test_values = self.test_raw_series.values
         actual = list()
         for i in range(len(test_values) - self.n_seq + 1):
             next_days_values = test_values[i: i + self.n_seq]
             actual.append(next_days_values)
         actual = np.array(actual)
-        # display("actual", actual)
+        display("actual", actual)
 
-        predictions = np.array(predictions.tolist())
-        # display("predicted", predictions)
+        predictions = np.array(predictions.tolist())[:- self.n_seq + 1]
+
+        display("predicted", predictions)
 
         if metric == "rmse":
             rmses = list()
@@ -363,7 +369,7 @@ class MultiStepLSTMCompany(Company):
             for i in range(self.n_seq):
                 print("\nCalculating trend score for ", i + 1)
                 correct_counts = 0
-                for j in range(len(predictions)):
+                for j in range(len(predictions) - i):
                     actual = self.test_raw_series[index[j + i]]
                     if actual > price_1_day_before:
                         true_trend = "up"
@@ -436,34 +442,30 @@ class MultiStepLSTMCompany(Company):
         return inverted_predictions
 
     def save_lstm_model(self):
-        file_name = self.name + "_nlag_" + str(self.n_lag) \
-                    + "_nseq_" + str(self.n_seq) + "_ind_" \
-                    + "".join(self.input_tech_indicators_list) \
-                    + "_train_" + self.train_start_date_string \
-                    + "_trainendteststart_" + self.train_end_test_start_date_string \
-                    + "_testend_" + self.test_end_date_string + ".h5"
-        file_name = file_name.replace("/", "-")
-        self.lstm_model.save("models/" + file_name)
+        self.lstm_model.save("models/" + self.create_file_name() + ".h5")
 
     def save_object(self):
-        file_name = self.name + "_nlag_" + str(self.n_lag) \
-                    + "_nseq_" + str(self.n_seq) + "_ind_" \
-                    + "".join(self.input_tech_indicators_list) \
-                    + "_train_" + self.train_start_date_string \
-                    + "_trainendteststart_" + self.train_end_test_start_date_string \
-                    + "_testend_" + self.test_end_date_string + ".pkl"
-        file_name = file_name.replace("/", "-")
         temp_model = self.lstm_model
         temp_holiday = self.us_holidays
         # not pickable so reload these at a later stage
         self.lstm_model = None
         self.us_holidays = None
         # don't save the Keras model
-        with open("obj/" + file_name, 'wb') as f:
+        with open("obj/" + self.create_file_name() + ".pkl", 'wb') as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
 
         self.lstm_model = temp_model
         self.us_holidays = temp_holiday
+
+    def create_file_name(self):
+        file_name = self.name + "_nlag_" + str(self.n_lag) \
+                    + "_nseq_" + str(self.n_seq) + "_ind_" \
+                    + "".join(self.input_tech_indicators_list) \
+                    + "_train_" + self.train_start_date_string \
+                    + "_trainendteststart_" + self.train_end_test_start_date_string \
+                    + "_testend_" + self.test_end_date_string
+        file_name = file_name.replace("/", "-")
+        return file_name
 
     def save(self):
         self.save_lstm_model()
