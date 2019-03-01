@@ -155,7 +155,7 @@ class MultiStepLSTMCompany(Company):
         #display("scaled test supervised", scaled_test_supervised)
 
         self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
-        print("Preprocessed data in ", time() - start_time, "s")
+        print("Preprocessed data in ", (time() - start_time)/60, "mins")
 
 
     def update_train_test_set(self, start_train, end_train_start_test, end_test):
@@ -229,7 +229,7 @@ class MultiStepLSTMCompany(Company):
         start_time = time()
         self.lstm_model = self.fit_lstm(self.train_scaled)
         self.reset()
-        self.time_taken_to_train = time() - start_time
+        self.time_taken_to_train = (time() - start_time)/60
         print("Finished fitting the model, time taken to train: %.1f s" % self.time_taken_to_train)
         print("Saving object and model")
         self.save()
@@ -487,7 +487,7 @@ class MultiStepLSTMCompany(Company):
         self.lstm_model = None
         self.us_holidays = None
         # don't save the Keras model
-        with open("obj/" + self.create_file_name() + ".pkl", 'wb') as f:
+        with open("objects/" + self.create_file_name() + ".pkl", 'wb') as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
 
         self.lstm_model = temp_model
