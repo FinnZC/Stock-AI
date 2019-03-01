@@ -24,6 +24,7 @@ class MultiStepLSTMCompany(Company):
         self.train_scaled, self.test_scaled = None, None
         self.supervised_pd = None
         self.raw_pd = None
+        self.train_raw_series, self.test_raw_series = None, None
         if tech_indicators == "all":
             self.input_tech_indicators_list = self.all_tech_indicators
         else:
@@ -38,12 +39,6 @@ class MultiStepLSTMCompany(Company):
         self.n_neurons = n_neurons
         self.time_taken_to_train = 0
 
-        self.train_raw_series = self.get_filtered_series(self.share_prices_series,
-                                                         self.train_start_date_string,
-                                                         self.train_end_test_start_date_string)
-        self.test_raw_series = self.get_filtered_series(self.share_prices_series,
-                                                        self.train_end_test_start_date_string,
-                                                        self.test_end_date_string, start_delay=1)
         self.preprocess_data()
 
     def add_tech_indicators_dataframe(self, price_series, indicators):
@@ -56,17 +51,19 @@ class MultiStepLSTMCompany(Company):
                     break
                 except KeyError:
                     # Could be that API has reached its limit
-                    print("Retrying to download indicator ", ind, " due to API limit")
+                    print("Retrying to download indicator", ind, "due to API limit 5 calls per minute and 500 calls per day")
                     sleep(20)
                     pass
 
         return combined
 
     def get_indicator(self, ind_name):
+
         if self.raw_pd is not None:
             if ind_name.upper() not in self.raw_pd.columns:
                 print("Downloading ", ind_name)
                 data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
+                #print(meta_data)
                 data.index = pd.to_datetime(data.index)
                 data.rename(columns={data.columns[0]: ind_name.upper()}, inplace=True)
             else:
@@ -89,6 +86,37 @@ class MultiStepLSTMCompany(Company):
     def preprocess_data(self):
         print("Preprocessing the data")
         start_time = time()
+
+        try:
+            data = pd.read_csv("raw_data/" + self.name + "_raw_pd.csv", index_col=0)
+            data.index = pd.to_datetime(data.index)
+            self.share_prices_series = data["Share Price"]
+            self.raw_pd = data
+            print("Retrieved price series and raw pd from disk")
+        except FileNotFoundError:
+            print("No existing data exist for this company so start downloading")
+            while True:
+                try:
+                    price_series, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
+                    break
+                except KeyError:
+                    # Could be that API has reached its limit
+                    print("Retrying to download price series")
+                    sleep(20)
+                    pass
+                # Convert index of the DataFrame which is in the date string format into datetime
+            price_series.index = pd.to_datetime(price_series.index)
+            self.share_prices_series = price_series["5. adjusted close"]  # Series
+            self.share_prices_series.name = "Share Price"
+
+        self.train_raw_series = self.get_filtered_series(self.share_prices_series,
+                                                             self.train_start_date_string,
+                                                             self.train_end_test_start_date_string)
+        self.test_raw_series = self.get_filtered_series(self.share_prices_series,
+                                                            self.train_end_test_start_date_string,
+                                                            self.test_end_date_string, start_delay=1)
+
+
 
         #display("train raw series", self.train_raw_series)
         #display("test raw series", self.test_raw_series)
@@ -177,7 +205,7 @@ class MultiStepLSTMCompany(Company):
         for i in range(len(self.input_tech_indicators_list)):
             for j in range(1, self.n_seq):
                 columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t+%d)" % j)
-        display(pd)
+        #display(pd)
         return pd.drop(columns_to_drop, axis=1)
 
     # scale train and test data to [-1, 1]
@@ -468,7 +496,7 @@ class MultiStepLSTMCompany(Company):
     def create_file_name(self):
         file_name = self.name + "_nlag_" + str(self.n_lag) \
                     + "_nseq_" + str(self.n_seq) + "_ind_" \
-                    + "".join(self.input_tech_indicators_list) \
+                    + str(len(self.input_tech_indicators_list)) \
                     + "_train_" + self.train_start_date_string \
                     + "_trainendteststart_" + self.train_end_test_start_date_string \
                     + "_testend_" + self.test_end_date_string
@@ -478,3 +506,6 @@ class MultiStepLSTMCompany(Company):
     def save(self):
         self.save_lstm_model()
         self.save_object()
+
+    def save_raw_pd_to_csv(self):
+        self.raw_pd.to_csv("raw_data/" + self.name + "_raw_pd.csv")

@@ -19,19 +19,6 @@ class Company(object):
                                     "minus_di", "minus_dm", "mom", "natr", "obv", "plus_di", "plus_dm",
                                     "ppo", "roc", "rocr", "rsi", "sar", "sma", "stoch", "stochf", "stochrsi",
                                     "t3", "tema", "trange", "trima", "trix", "ultsoc", "willr", "wma"]
-        while True:
-            try:
-                price_series, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
-                break
-            except KeyError:
-                # Could be that API has reached its limit
-                print("Retrying to download price series")
-                sleep(20)
-                pass
-        # Convert index of the DataFrame which is in the date string format into datetime
-        price_series.index = pd.to_datetime(price_series.index)
-        self.share_prices_series = price_series["5. adjusted close"]  # Series
-        self.share_prices_series.name = "Share Price"
         self.us_holidays = holidays.UnitedStates()
 
     def convert_date_string_to_datetime(self, date_string):
