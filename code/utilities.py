@@ -8,22 +8,10 @@ import multiprocessing
 
 NUM_PARALLEL_EXEC_UNITS = multiprocessing.cpu_count()
 
-def optimal_config():
-    # source https://software.intel.com/en-us/articles/tips-to-improve-performance-for-popular-deep-learning-frameworks-on-multi-core-cpus
-    optimal_tensorflow_config()
-    optimal_keras_config()
 
 def optimal_tensorflow_config():
-    config = tf.ConfigProto(intra_op_parallelism_threads=NUM_PARALLEL_EXEC_UNITS, inter_op_parallelism_threads=2,
-                            allow_soft_placement=True, device_count={'CPU': NUM_PARALLEL_EXEC_UNITS})
+    # source https://software.intel.com/en-us/articles/tips-to-improve-performance-for-popular-deep-learning-frameworks-on-multi-core-cpus
 
-    session = tf.Session(config=config)
-    os.environ["OMP_NUM_THREADS"] = "NUM_PARALLEL_EXEC_UNITS"
-    os.environ["KMP_BLOCKTIME"] = "30"
-    os.environ["KMP_SETTINGS"] = "1"
-    os.environ["KMP_AFFINITY"] = "granularity=fine,verbose,compact,1,0"
-
-def optimal_keras_config():
     config = tf.ConfigProto(intra_op_parallelism_threads=NUM_PARALLEL_EXEC_UNITS, inter_op_parallelism_threads=2,
                             allow_soft_placement=True, device_count={'CPU': NUM_PARALLEL_EXEC_UNITS})
 
@@ -33,6 +21,8 @@ def optimal_keras_config():
     os.environ["KMP_BLOCKTIME"] = "30"
     os.environ["KMP_SETTINGS"] = "1"
     os.environ["KMP_AFFINITY"] = "granularity=fine,verbose,compact,1,0"
+
+
 
 def load_lstm_model(file_name):
     model = load_model("models/" + file_name + ".h5")
@@ -48,7 +38,6 @@ def load_saved_model(file_name):
     obj = load_object(file_name)
     obj.lstm_model = load_lstm_model(file_name)
     obj.us_holidays = holidays.UnitedStates()
-
     return obj
 
 #optimal_config()

@@ -75,7 +75,7 @@ class MultiStepLSTMCompany(Company):
                 data.index = pd.to_datetime(data.index)
                 data.rename(columns={data.columns[0]: ind_name.upper()}, inplace=True)
             else:
-                print("Add from existing raw_pd ", ind_name)
+                #print("Add from existing raw_pd ", ind_name)
                 data = self.raw_pd[ind_name.upper()]
         else:
             print("Downloading ", ind_name)
@@ -254,31 +254,31 @@ class MultiStepLSTMCompany(Company):
     # fit an LSTM network to training data
     def fit_lstm(self, train):
         # reshape training into [samples, timesteps, features]
+        # timestesp is 1 as there is 1 sample per day
         X, y = train[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                train[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
-        X = X.reshape(X.shape[0], 1, X.shape[1])
-        print("train size", len(X))
-        print("train X data", X)
-        print("train y data", y)
+        total_indicators = len(self.input_tech_indicators_list) + 1
+        X = X.reshape(X.shape[0], self.n_lag, total_indicators)
         # design network
         model = Sequential()
         # source https://machinelearningmastery.com/how-to-develop-lstm-models-for-time-series-forecasting/
         if self.model_type == "vanilla":
-            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]), stateful=True))
+            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, total_indicators), stateful=True)) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             model.add(Dense(y.shape[1]))
         elif self.model_type == "stacked":
             # 2 hidden layers, but can be modified
-            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]),
+            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, total_indicators), #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
                            return_sequences=True, stateful=True))
             model.add(LSTM(self.n_neurons))
             model.add(Dense(y.shape[1]))
         elif self.model_type == "bi":
-            model.add(Bidirectional(LSTM(self.n_neurons), batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])))
+            X = X.reshape(X.shape[0], 1, X.shape[1])
+            model.add(Bidirectional(LSTM(self.n_neurons), input_shape=(self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             model.add(Dense(y.shape[1]))
 
         elif self.model_type == "cnn":
             model.add(TimeDistributed(Conv1D(filters=64, kernel_size=1),
-                                      batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])))
+                                      input_shape=(None, self.n_lag, total_indicators))) #batch_input_shape=(None, X.shape[1], X.shape[2])
             model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
             model.add(TimeDistributed(Flatten()))
             model.add(LSTM(self.n_neurons))
@@ -286,19 +286,64 @@ class MultiStepLSTMCompany(Company):
 
         elif self.model_type == "conv":
             model.add(ConvLSTM2D(filters=64, kernel_size=(1, 2),
-                                 batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])))
+                                 input_shape=(None, 1, self.n_lag, total_indicators)))
             model.add(Flatten())
             model.add(Dense(y.shape[1]))
         else:
             raise ValueError("self.model_type is not any of the specified")
 
         model.compile(loss='mean_squared_error', optimizer='adam')
+
+        print("train size", len(X))
+        print("train X data", X)
+        print("train y data", y)
         # fit network
+        print("Trained model with batch size", self.n_batch)
         model.summary()
         for i in range(self.n_epochs):
             model.fit(X, y, epochs=1, batch_size=self.n_batch, verbose=0, shuffle=False)
             model.reset_states()
-        return model
+        # source https://machinelearningmastery.com/use-different-batch-sizes-training-predicting-python-keras/
+        # Create a new model with batch size 1 and give the trained weight, this allows the model
+        # to be used to predict 1 step instead of batches
+        n_batch = 1
+        new_model = Sequential()
+        # source https://machinelearningmastery.com/how-to-develop-lstm-models-for-time-series-forecasting/
+        if self.model_type == "vanilla":
+            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, X.shape[1], X.shape[2]), stateful=True))
+            new_model.add(Dense(y.shape[1]))
+        elif self.model_type == "stacked":
+            # 2 hidden layers, but can be modified
+            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, X.shape[1], X.shape[2]),
+                           return_sequences=True, stateful=True))
+            new_model.add(LSTM(self.n_neurons))
+            new_model.add(Dense(y.shape[1]))
+        elif self.model_type == "bi":
+            new_model.add(Bidirectional(LSTM(self.n_neurons), batch_input_shape=(n_batch, X.shape[1], X.shape[2])))
+            new_model.add(Dense(y.shape[1]))
+
+        elif self.model_type == "cnn":
+            new_model.add(TimeDistributed(Conv1D(filters=64, kernel_size=1),
+                                      batch_input_shape=(n_batch, X.shape[1], X.shape[2])))
+            new_model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
+            new_model.add(TimeDistributed(Flatten()))
+            new_model.add(LSTM(self.n_neurons))
+            new_model.add(Dense(y.shape[1]))
+
+        elif self.model_type == "conv":
+            new_model.add(ConvLSTM2D(filters=64, kernel_size=(1, 2),
+                                 batch_input_shape=(n_batch, X.shape[1], X.shape[2])))
+            new_model.add(Flatten())
+            new_model.add(Dense(y.shape[1]))
+        else:
+            raise ValueError("self.model_type is not any of the specified")
+
+        new_model.set_weights(model.get_weights())
+
+        print("New model with batch size 1 for prediction")
+        new_model.summary()
+
+        return new_model
 
     # make one forecast with an LSTM,
     def forecast_lstm(self, X):
@@ -362,7 +407,7 @@ class MultiStepLSTMCompany(Company):
         X, y = self.train_scaled[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                self.train_scaled[:,self.n_lag * (len(self.input_tech_indicators_list) + 1):]
         X = X.reshape(X.shape[0], 1, X.shape[1])
-        self.lstm_model.predict(X, batch_size=self.n_batch)
+        self.lstm_model.predict(X, batch_size=1)
 
     # make a one-step forecast standalone
     def forecast_lstm_one_step(self):
@@ -371,7 +416,7 @@ class MultiStepLSTMCompany(Company):
         train_index = self.train_raw_series.index
 
         X = np.array(self.train_scaled[len(self.train_scaled) - 1, self.n_seq:])
-        print("X: ", X, "y: ?")
+        #print("X: ", X, "y: ?")
         pred = self.forecast_lstm(X)
         # store forecast
         predictions.at[self.date_by_adding_business_days(train_index[-1], 1)] = pred
@@ -388,24 +433,24 @@ class MultiStepLSTMCompany(Company):
         predictions = pd.Series()
         # Index is datetime
         test_index = self.test_raw_series.index
-        print("index", test_index)
+        #print("index", test_index)
         for i in range(len(self.test_scaled)):
             # make multi-step forecast
             X, y = self.test_scaled[i, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                    self.test_scaled[i, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
 
             pred = self.forecast_lstm(X)
-            print("X: ", X, "y: ", y, " pred: ", pred)
+            #print("X: ", X, "y: ", y, " pred: ", pred)
 
             # store forecast
             predictions.at[test_index[i]] = pred
-            # display(predictions)
+            #display(predictions)
 
         # display("predictions before inverse transform", predictions)
         # inverse transform
         predictions = self.inverse_transform(self.train_raw_series.append(self.test_raw_series), predictions,
                                              len(self.test_raw_series))
-        print("Predictions after inverse transform")
+        #print("Predictions after inverse transform")
         return predictions
 
 
@@ -421,7 +466,7 @@ class MultiStepLSTMCompany(Company):
         actual = np.array(actual)
         print("actual", actual)
 
-        predictions = np.array(predictions.tolist())[:- self.n_seq + 1]
+        predictions = np.array(predictions.tolist())
 
         print("predicted", predictions)
 
@@ -459,9 +504,9 @@ class MultiStepLSTMCompany(Company):
 
                     if true_trend == predicted_trend:
                         correct_counts += 1
-                    print("Price 1 day before: ", price_1_day_before)
-                    print("Actual price: ", actual, " | Predicted price: ", predictions[j, i])
-                    print("Actual trend: ", true_trend, " | Predicted trend: ", predicted_trend)
+                    #print("Price 1 day before: ", price_1_day_before)
+                    #print("Actual price: ", actual, " | Predicted price: ", predictions[j, i])
+                    #print("Actual trend: ", true_trend, " | Predicted trend: ", predicted_trend)
                     # next day
                     price_1_day_before = actual
                 price_1_day_before = self.test_raw_series[index[i]]
@@ -472,7 +517,7 @@ class MultiStepLSTMCompany(Company):
         elif metric == "apre":
             apres = list()
             for i in range(self.n_seq):
-                apre = abs(actual[:, i] - predictions[:, i]) / actual[:, i]
+                apre = np.mean(abs(actual[:, i] - predictions[:, i]) / actual[:, i])
                 print('t+%d APRE: %f' % ((i + 1), apre))
                 apres.append(apre)
             return apres
@@ -486,16 +531,16 @@ class MultiStepLSTMCompany(Company):
         inverted = list()
         new = forecast[0] + last_ob
         inverted.append(new)
-        print("Inverse difference Pred: ", forecast[0], "  + Reference Price:", last_ob, " = ", new)
+        #print("Inverse difference Pred: ", forecast[0], "  + Reference Price:", last_ob, " = ", new)
         last_ob = new
         # propagate difference forecast using inverted first value
         for i in range(1, len(forecast)):
             new = forecast[i] + inverted[i - 1]
             inverted.append(new)
-            print("Inverse difference Pred: ", forecast[i], "  + Reference Price:", last_ob, " = ", new)
+            #print("Inverse difference Pred: ", forecast[i], "  + Reference Price:", last_ob, " = ", new)
             last_ob = new
 
-        print("Final inverted values: ", inverted)
+        #print("Final inverted values: ", inverted)
         return inverted
 
     # inverse data transform on forecasts
@@ -511,7 +556,7 @@ class MultiStepLSTMCompany(Company):
             # invert scaling
             inv_scale = self.scaler.inverse_transform(pred)[0, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
             # inv_scale = inv_scale[0, :]
-            print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
+            #print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
                         # invert differencing
             # -1 to get the t-1 price
             index = len(series) - n_test + i - 1
@@ -538,7 +583,7 @@ class MultiStepLSTMCompany(Company):
         self.us_holidays = temp_holiday
 
     def create_file_name(self):
-        file_name = self.name + "_nlag_" + str(self.n_lag) \
+        file_name = self.name + "_" + self.model_type + "_nlag_" + str(self.n_lag) \
                     + "_nseq_" + str(self.n_seq) + "_ind_" \
                     + str(len(self.input_tech_indicators_list)) \
                     + "_train_" + self.train_start_date_string \
