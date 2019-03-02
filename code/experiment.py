@@ -1,5 +1,5 @@
-
 import numpy as np
+import json
 n_epochs = np.logspace(100, 10000, num=10)
 n_batches = np.logspace(1, 100, num=10)
 n_neurons = np.logspace(1, 100, num=10)
@@ -22,5 +22,6 @@ def get_optimal_epochs_batch_neurons_params(symbol, start_train_date, end_train_
                 lstm_score = obj.score(metric="rmse", predictions=predictions)
                 accuracy[n_e][n_b][n_n] = (trend_score, lstm_score)
 
-
+    with open("optimisations/" + symbol +".json", 'w') as outfile:
+        json.dump(accuracy, outfile)
 

@@ -7,6 +7,14 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
+from keras.layers import Bidirectional
+from keras.layers import Flatten
+from keras.layers import TimeDistributed
+from keras.layers.convolutional import Conv1D
+from keras.layers.convolutional import MaxPooling1D
+from keras.layers import ConvLSTM2D
+
+
 from sklearn.metrics import mean_squared_error
 from numpy import array
 from company import Company
@@ -17,7 +25,7 @@ import pickle
 
 class MultiStepLSTMCompany(Company):
     def __init__(self, name, train_start_date_string, train_end_test_start_date_string, test_end_date_string,
-                 n_lag, n_seq, n_epochs, n_batch, n_neurons, tech_indicators=[]):
+                 n_lag, n_seq, n_epochs, n_batch, n_neurons, tech_indicators=[], model_type="vanilla"):
         Company.__init__(self, name)
         self.scaler = None
         self.lstm_model = None
@@ -25,6 +33,7 @@ class MultiStepLSTMCompany(Company):
         self.supervised_pd = None
         self.raw_pd = None
         self.train_raw_series, self.test_raw_series = None, None
+        self.model_type = model_type
         if tech_indicators == "all":
             self.input_tech_indicators_list = self.all_tech_indicators
         else:
@@ -58,7 +67,6 @@ class MultiStepLSTMCompany(Company):
         return combined
 
     def get_indicator(self, ind_name):
-
         if self.raw_pd is not None:
             if ind_name.upper() not in self.raw_pd.columns:
                 print("Downloading ", ind_name)
@@ -230,7 +238,7 @@ class MultiStepLSTMCompany(Company):
         self.lstm_model = self.fit_lstm(self.train_scaled)
         self.reset()
         self.time_taken_to_train = (time() - start_time)/60
-        print("Finished fitting the model, time taken to train: %.1f s" % self.time_taken_to_train)
+        print("Finished fitting the model, time taken to train: %.1f mins" % self.time_taken_to_train)
         print("Saving object and model")
         self.save()
 
@@ -241,7 +249,7 @@ class MultiStepLSTMCompany(Company):
         self.lstm_model.reset_states()
         X, y = self.train_scaled[:, 0:self.n_lag], self.train_scaled[:, self.n_lag:]
         X = X.reshape(X.shape[0], 1, X.shape[1])
-        self.lstm_model.predict(X, batch_size=self.n_batch)
+        self.lstm_model.predict(X, batch_size=1)
 
     # fit an LSTM network to training data
     def fit_lstm(self, train):
@@ -249,14 +257,44 @@ class MultiStepLSTMCompany(Company):
         X, y = train[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                train[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
         X = X.reshape(X.shape[0], 1, X.shape[1])
+        print("train size", len(X))
         print("train X data", X)
         print("train y data", y)
         # design network
         model = Sequential()
-        model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]), stateful=True))
-        model.add(Dense(y.shape[1]))
+        # source https://machinelearningmastery.com/how-to-develop-lstm-models-for-time-series-forecasting/
+        if self.model_type == "vanilla":
+            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]), stateful=True))
+            model.add(Dense(y.shape[1]))
+        elif self.model_type == "stacked":
+            # 2 hidden layers, but can be modified
+            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, X.shape[1], X.shape[2]),
+                           return_sequences=True, stateful=True))
+            model.add(LSTM(self.n_neurons))
+            model.add(Dense(y.shape[1]))
+        elif self.model_type == "bi":
+            model.add(Bidirectional(LSTM(self.n_neurons), batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])))
+            model.add(Dense(y.shape[1]))
+
+        elif self.model_type == "cnn":
+            model.add(TimeDistributed(Conv1D(filters=64, kernel_size=1),
+                                      batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])))
+            model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
+            model.add(TimeDistributed(Flatten()))
+            model.add(LSTM(self.n_neurons))
+            model.add(Dense(y.shape[1]))
+
+        elif self.model_type == "conv":
+            model.add(ConvLSTM2D(filters=64, kernel_size=(1, 2),
+                                 batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])))
+            model.add(Flatten())
+            model.add(Dense(y.shape[1]))
+        else:
+            raise ValueError("self.model_type is not any of the specified")
+
         model.compile(loss='mean_squared_error', optimizer='adam')
         # fit network
+        model.summary()
         for i in range(self.n_epochs):
             model.fit(X, y, epochs=1, batch_size=self.n_batch, verbose=0, shuffle=False)
             model.reset_states()
@@ -267,7 +305,7 @@ class MultiStepLSTMCompany(Company):
         # reshape input pattern to [samples, timesteps, features]
         X = X.reshape(1, 1, len(X))
         # make forecast
-        forecast = self.lstm_model.predict(X, batch_size=self.n_batch)
+        forecast = self.lstm_model.predict(X, batch_size=1)
         # display("forecast", forecast)
         # convert to array
         return [x for x in forecast[0, :]]
@@ -390,11 +428,9 @@ class MultiStepLSTMCompany(Company):
         if metric == "rmse":
             rmses = list()
             for i in range(self.n_seq):
-                # first one is the test data and the next n_seq are predictions
                 rmse = math.sqrt(mean_squared_error(actual[:, i], predictions[:, i]))
                 print('t+%d RMSE: %f' % ((i + 1), rmse))
                 rmses.append(rmse)
-
             return rmses
 
         elif metric == "trend":
@@ -432,6 +468,14 @@ class MultiStepLSTMCompany(Company):
                 print("Correct counts: ", correct_counts, "  Size of test set:", len(self.test_raw_series))
                 trends.append(correct_counts / len(self.test_raw_series))
             return trends
+
+        elif metric == "apre":
+            apres = list()
+            for i in range(self.n_seq):
+                apre = abs(actual[:, i] - predictions[:, i]) / actual[:, i]
+                print('t+%d APRE: %f' % ((i + 1), apre))
+                apres.append(apre)
+            return apres
         else:
             print(metric, " is not an valid metric. Return NONE")
             return None
