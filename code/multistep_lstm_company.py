@@ -245,6 +245,7 @@ class MultiStepLSTMCompany(Company):
         # reshape training into [samples, timesteps, features]
         print("Reseting the lstm model")
         self.lstm_model.reset_states()
+        total_indicators = len(self.input_tech_indicators_list) + 1
         X, y = self.train_scaled[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                self.train_scaled[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
 
@@ -304,7 +305,8 @@ class MultiStepLSTMCompany(Company):
 
         model.compile(loss='mean_squared_error', optimizer='adam')
 
-        print("train size", len(X))
+        print("train X size", len(X), " train X data dimension", X.shape)
+        print("train y size", len(y), " train X data dimension", y.shape)
         print("train X data", X)
         print("train y data", y)
         # fit network
@@ -357,67 +359,20 @@ class MultiStepLSTMCompany(Company):
 
     # make one forecast with an LSTM,
     def forecast_lstm(self, X):
-        # reshape input pattern to [samples, timesteps, features]
-        X = X.reshape(1, 1, len(X))
         # make forecast
+        total_indicators = len(self.input_tech_indicators_list) + 1
+        if self.model_type == "vanilla" or self.model_type == "stacked" or self.model_type == "bi":
+            X = X.reshape(1, self.n_lag, total_indicators)
+        elif self.model_type == "cnn":
+            X = X.reshape(1, 1, self.n_lag, total_indicators)
+        elif self.model_type == "conv":
+            X = X.reshape(1, 1, 1, self.n_lag, total_indicators)
+        else:
+            raise ValueError("self.model_type is not any of the specified")
         forecast = self.lstm_model.predict(X, batch_size=1)
         # display("forecast", forecast)
         # convert to array
         return [x for x in forecast[0, :]]
-
-    # plot function for children classes, if run by parent, error would happen
-    def plot(self, predictions):
-        # line plot of observed vs predicted
-        formatter = matplotlib.dates.DateFormatter('%d/%m/%Y')
-        # display(predictions.index)
-        for test_date in predictions.index:
-            # n_seq consecutive days
-            x_axis = list()
-            # The first day of test
-            x_axis.append(test_date)
-            for j in range(self.n_seq - 1):  # first one already added
-                x_axis.append(self.date_by_adding_business_days(from_date=x_axis[-1], add_days=1))
-            plt.plot(x_axis, predictions[test_date], ':', marker='*', color="blue", label="Predicted prices")
-
-        plt.plot(self.train_raw_series.index, self.train_raw_series.values,
-                 '-', marker=".", label="Actual prices (Training data)")
-
-        # test data not always possible
-        try:
-            plt.plot(self.test_raw_series.index,
-                     self.test_raw_series.values,
-                     '-', marker=".", label="Actual prices (Test data)")
-        except:
-            # don't plot test data if not available
-            print("Exception entered")
-            pass
-        # remove repeated legends
-        handles, labels = plt.gca().get_legend_handles_labels()
-        i = 1
-        while i < len(labels):
-            if labels[i] in labels[:i]:
-                del (labels[i])
-                del (handles[i])
-            else:
-                i += 1
-        plt.legend(handles, labels)
-        ax = plt.gcf().axes[0]
-        ax.xaxis.set_major_formatter(formatter)
-        plt.gcf().autofmt_xdate(rotation=25)
-        plt.gcf().set_size_inches(15, 10)
-        plt.xlabel("Time")
-        plt.ylabel("Share Price ($)")
-        plt.title("Stock price prediction for " + self.name)
-        plt.show()
-
-    def reset(self):
-        # forecast the entire training dataset to build up state for forecasting
-        # reshape training into [samples, timesteps, features]
-        self.lstm_model.reset_states()
-        X, y = self.train_scaled[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
-               self.train_scaled[:,self.n_lag * (len(self.input_tech_indicators_list) + 1):]
-        X = X.reshape(X.shape[0], 1, X.shape[1])
-        self.lstm_model.predict(X, batch_size=1)
 
     # make a one-step forecast standalone
     def forecast_lstm_one_step(self):
@@ -444,23 +399,13 @@ class MultiStepLSTMCompany(Company):
         # Index is datetime
         test_index = self.test_raw_series.index
         #print("index", test_index)
-        total_indicators = len(self.input_tech_indicators_list) + 1
 
         for i in range(len(self.test_scaled)):
             # make multi-step forecast
             X, y = self.test_scaled[i, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                    self.test_scaled[i, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
-
-            if self.model_type == "vanilla" or self.model_type == "stacked" or self.model_type == "bi":
-                X = X.reshape(X.shape[0], self.n_lag, total_indicators)
-            elif self.model_type == "cnn":
-                X = X.reshape(X.shape[0], 1, self.n_lag, total_indicators)
-            elif self.model_type == "conv":
-                X = X.reshape(X.shape[0], 1, 1, self.n_lag, total_indicators)
-            else:
-                raise ValueError("self.model_type is not any of the specified")
             pred = self.forecast_lstm(X)
-            #print("X: ", X, "y: ", y, " pred: ", pred)
+            print("X: ", X, "y: ", y, " pred: ", pred)
 
             # store forecast
             predictions.at[test_index[i]] = pred
@@ -473,7 +418,6 @@ class MultiStepLSTMCompany(Company):
         #print("Predictions after inverse transform")
         return predictions
 
-
     # evaluate the RMSE for each forecast time step
     def score(self, metric, predictions):
         # convert actual tests and predictions to an appropriate list or arrays
@@ -485,8 +429,8 @@ class MultiStepLSTMCompany(Company):
             actual.append(next_days_values)
         actual = np.array(actual)
         print("actual", actual)
-
-        predictions = np.array(predictions.tolist())
+        # excludes the ones that do not have test data
+        predictions = np.array(predictions.tolist()[:-self.n_seq + 1])
 
         print("predicted", predictions)
 
@@ -618,3 +562,48 @@ class MultiStepLSTMCompany(Company):
 
     def save_raw_pd_to_csv(self):
         self.raw_pd.to_csv("raw_data/" + self.name + "_raw_pd.csv")
+
+    # plot function for children classes, if run by parent, error would happen
+    def plot(self, predictions):
+        # line plot of observed vs predicted
+        formatter = matplotlib.dates.DateFormatter('%d/%m/%Y')
+        # display(predictions.index)
+        for test_date in predictions.index:
+            # n_seq consecutive days
+            x_axis = list()
+            # The first day of test
+            x_axis.append(test_date)
+            for j in range(self.n_seq - 1):  # first one already added
+                x_axis.append(self.date_by_adding_business_days(from_date=x_axis[-1], add_days=1))
+            plt.plot(x_axis, predictions[test_date], ':', marker='*', color="blue", label="Predicted prices")
+
+        plt.plot(self.train_raw_series.index, self.train_raw_series.values,
+                 '-', marker=".", label="Actual prices (Training data)")
+
+        # test data not always possible
+        try:
+            plt.plot(self.test_raw_series.index,
+                     self.test_raw_series.values,
+                     '-', marker=".", label="Actual prices (Test data)")
+        except:
+            # don't plot test data if not available
+            print("Exception entered")
+            pass
+        # remove repeated legends
+        handles, labels = plt.gca().get_legend_handles_labels()
+        i = 1
+        while i < len(labels):
+            if labels[i] in labels[:i]:
+                del (labels[i])
+                del (handles[i])
+            else:
+                i += 1
+        plt.legend(handles, labels)
+        ax = plt.gcf().axes[0]
+        ax.xaxis.set_major_formatter(formatter)
+        plt.gcf().autofmt_xdate(rotation=25)
+        plt.gcf().set_size_inches(15, 10)
+        plt.xlabel("Time")
+        plt.ylabel("Share Price ($)")
+        plt.title("Stock price prediction for " + self.name)
+        plt.show()
