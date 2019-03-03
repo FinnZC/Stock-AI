@@ -47,7 +47,6 @@ class MultiStepLSTMCompany(Company):
         self.n_batch = n_batch
         self.n_neurons = n_neurons
         self.time_taken_to_train = 0
-
         self.preprocess_data()
 
     def add_tech_indicators_dataframe(self, price_series, indicators):
@@ -63,7 +62,6 @@ class MultiStepLSTMCompany(Company):
                     print("Retrying to download indicator", ind, "due to API limit 5 calls per minute and 500 calls per day")
                     sleep(20)
                     pass
-
         return combined
 
     def get_indicator(self, ind_name):
@@ -85,7 +83,6 @@ class MultiStepLSTMCompany(Company):
 
         return data
 
-
     def update_raw_pd(self):
         print("Updating all series: share prices", ", ".join(self.input_tech_indicators_list))
         self.raw_pd = None
@@ -94,7 +91,6 @@ class MultiStepLSTMCompany(Company):
     def preprocess_data(self):
         print("Preprocessing the data")
         start_time = time()
-
         try:
             data = pd.read_csv("raw_data/" + self.name + "_raw_pd.csv", index_col=0)
             data.index = pd.to_datetime(data.index)
@@ -159,12 +155,10 @@ class MultiStepLSTMCompany(Company):
 
         self.scaler, scaled_train_supervised, scaled_test_supervised = self.scale(train_supervised_values,
                                                                                   test_supervised_values)
-        #display("scaled train supervised", scaled_train_supervised)
+        #display("scaled train supervised", scaled_train_supervised.shape)
         #display("scaled test supervised", scaled_test_supervised)
-
         self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
         print("Preprocessed data in ", (time() - start_time)/60, "mins")
-
 
     def update_train_test_set(self, start_train, end_train_start_test, end_test):
         print("Update the training and testing set with the specified dates: "
@@ -173,6 +167,10 @@ class MultiStepLSTMCompany(Company):
         self.train_start_date_string = start_train
         self.train_end_test_start_date_string = end_train_start_test
         self.test_end_date_string = end_test
+        self.preprocess_data()
+
+    def update_indicator(self, list):
+        self.input_tech_indicators_list = list
         self.preprocess_data()
 
     # create a differenced series
@@ -247,8 +245,17 @@ class MultiStepLSTMCompany(Company):
         # reshape training into [samples, timesteps, features]
         print("Reseting the lstm model")
         self.lstm_model.reset_states()
-        X, y = self.train_scaled[:, 0:self.n_lag], self.train_scaled[:, self.n_lag:]
-        X = X.reshape(X.shape[0], 1, X.shape[1])
+        X, y = self.train_scaled[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
+               self.train_scaled[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
+
+        if self.model_type == "vanilla" or self.model_type == "stacked" or self.model_type == "bi":
+            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
+        elif self.model_type == "cnn":
+            X = X.reshape(X.shape[0], 1, self.n_lag, total_indicators)
+        elif self.model_type == "conv":
+            X = X.reshape(X.shape[0], 1, 1, self.n_lag, total_indicators)
+        else:
+            raise ValueError("self.model_type is not any of the specified")
         self.lstm_model.predict(X, batch_size=1)
 
     # fit an LSTM network to training data
@@ -258,25 +265,27 @@ class MultiStepLSTMCompany(Company):
         X, y = train[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                train[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
         total_indicators = len(self.input_tech_indicators_list) + 1
-        X = X.reshape(X.shape[0], self.n_lag, total_indicators)
         # design network
         model = Sequential()
         # source https://machinelearningmastery.com/how-to-develop-lstm-models-for-time-series-forecasting/
         if self.model_type == "vanilla":
+            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
             model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, total_indicators), stateful=True)) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             model.add(Dense(y.shape[1]))
         elif self.model_type == "stacked":
             # 2 hidden layers, but can be modified
+            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
             model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, total_indicators), #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
                            return_sequences=True, stateful=True))
             model.add(LSTM(self.n_neurons))
             model.add(Dense(y.shape[1]))
         elif self.model_type == "bi":
-            X = X.reshape(X.shape[0], 1, X.shape[1])
-            model.add(Bidirectional(LSTM(self.n_neurons), input_shape=(self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
+            model.add(Bidirectional(LSTM(self.n_neurons, stateful=True), batch_input_shape=(self.n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             model.add(Dense(y.shape[1]))
 
         elif self.model_type == "cnn":
+            X = X.reshape(X.shape[0], 1, self.n_lag, total_indicators)
             model.add(TimeDistributed(Conv1D(filters=64, kernel_size=1),
                                       input_shape=(None, self.n_lag, total_indicators))) #batch_input_shape=(None, X.shape[1], X.shape[2])
             model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
@@ -285,8 +294,9 @@ class MultiStepLSTMCompany(Company):
             model.add(Dense(y.shape[1]))
 
         elif self.model_type == "conv":
+            X = X.reshape(X.shape[0], 1, 1, self.n_lag, total_indicators)
             model.add(ConvLSTM2D(filters=64, kernel_size=(1, 2),
-                                 input_shape=(None, 1, self.n_lag, total_indicators)))
+                                 input_shape=(1, 1, self.n_lag, total_indicators)))
             model.add(Flatten())
             model.add(Dense(y.shape[1]))
         else:
@@ -310,21 +320,21 @@ class MultiStepLSTMCompany(Company):
         new_model = Sequential()
         # source https://machinelearningmastery.com/how-to-develop-lstm-models-for-time-series-forecasting/
         if self.model_type == "vanilla":
-            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, X.shape[1], X.shape[2]), stateful=True))
+            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, self.n_lag, total_indicators), stateful=True)) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             new_model.add(Dense(y.shape[1]))
         elif self.model_type == "stacked":
             # 2 hidden layers, but can be modified
-            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, X.shape[1], X.shape[2]),
+            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, self.n_lag, total_indicators), #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
                            return_sequences=True, stateful=True))
             new_model.add(LSTM(self.n_neurons))
             new_model.add(Dense(y.shape[1]))
         elif self.model_type == "bi":
-            new_model.add(Bidirectional(LSTM(self.n_neurons), batch_input_shape=(n_batch, X.shape[1], X.shape[2])))
+            new_model.add(Bidirectional(LSTM(self.n_neurons, stateful=True), batch_input_shape=(n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             new_model.add(Dense(y.shape[1]))
 
         elif self.model_type == "cnn":
             new_model.add(TimeDistributed(Conv1D(filters=64, kernel_size=1),
-                                      batch_input_shape=(n_batch, X.shape[1], X.shape[2])))
+                                      input_shape=(None, self.n_lag, total_indicators))) #batch_input_shape=(None, X.shape[1], X.shape[2])
             new_model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
             new_model.add(TimeDistributed(Flatten()))
             new_model.add(LSTM(self.n_neurons))
@@ -332,7 +342,7 @@ class MultiStepLSTMCompany(Company):
 
         elif self.model_type == "conv":
             new_model.add(ConvLSTM2D(filters=64, kernel_size=(1, 2),
-                                 batch_input_shape=(n_batch, X.shape[1], X.shape[2])))
+                                 input_shape=(1, 1, self.n_lag, total_indicators)))
             new_model.add(Flatten())
             new_model.add(Dense(y.shape[1]))
         else:
@@ -340,7 +350,7 @@ class MultiStepLSTMCompany(Company):
 
         new_model.set_weights(model.get_weights())
 
-        print("New model with batch size 1 for prediction")
+        print("\n\nNew model with batch size 1 for prediction")
         new_model.summary()
 
         return new_model
@@ -434,11 +444,21 @@ class MultiStepLSTMCompany(Company):
         # Index is datetime
         test_index = self.test_raw_series.index
         #print("index", test_index)
+        total_indicators = len(self.input_tech_indicators_list) + 1
+
         for i in range(len(self.test_scaled)):
             # make multi-step forecast
             X, y = self.test_scaled[i, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                    self.test_scaled[i, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
 
+            if self.model_type == "vanilla" or self.model_type == "stacked" or self.model_type == "bi":
+                X = X.reshape(X.shape[0], self.n_lag, total_indicators)
+            elif self.model_type == "cnn":
+                X = X.reshape(X.shape[0], 1, self.n_lag, total_indicators)
+            elif self.model_type == "conv":
+                X = X.reshape(X.shape[0], 1, 1, self.n_lag, total_indicators)
+            else:
+                raise ValueError("self.model_type is not any of the specified")
             pred = self.forecast_lstm(X)
             #print("X: ", X, "y: ", y, " pred: ", pred)
 
