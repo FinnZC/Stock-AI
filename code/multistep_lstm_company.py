@@ -25,7 +25,7 @@ import pickle
 
 class MultiStepLSTMCompany(Company):
     def __init__(self, name, train_start_date_string, train_end_test_start_date_string, test_end_date_string,
-                 n_lag, n_seq, n_epochs, n_batch, n_neurons, tech_indicators=[], model_type="vanilla"):
+                 n_lag, n_seq, n_epochs, n_neurons, n_batch=None, tech_indicators=[], model_type="vanilla"):
         Company.__init__(self, name)
         self.scaler = None
         self.lstm_model = None
@@ -120,8 +120,18 @@ class MultiStepLSTMCompany(Company):
                                                             self.train_end_test_start_date_string,
                                                             self.test_end_date_string, start_delay=1)
 
-
-
+        if self.n_batch == "full_batch":
+            self.n_batch = len(self.train_raw_series)
+        elif self.n_batch == "online":
+            self.n_batch = 1
+        elif self.n_batch == "half_batch":
+            half = int(len(self.train_raw_series)/2)
+            for i in range(half)[::-1]:
+                if len(self.train_raw_series) % i == 0:
+                    self.n_batch = i
+                    break
+        else:
+            raise ValueError("n_batch is not full_batch, half_batch, nor online. Must be one of them!")
         #display("train raw series", self.train_raw_series)
         #display("test raw series", self.test_raw_series)
         price_series = self.share_prices_series
@@ -282,7 +292,7 @@ class MultiStepLSTMCompany(Company):
             model.add(Dense(y.shape[1]))
         elif self.model_type == "bi":
             X = X.reshape(X.shape[0], self.n_lag, total_indicators)
-            model.add(Bidirectional(LSTM(self.n_neurons, stateful=True), batch_input_shape=(self.n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            model.add(Bidirectional(LSTM(self.n_neurons, stateful=True),batch_input_shape=(self.n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             model.add(Dense(y.shape[1]))
 
         elif self.model_type == "cnn":
@@ -305,16 +315,17 @@ class MultiStepLSTMCompany(Company):
 
         model.compile(loss='mean_squared_error', optimizer='adam')
 
-        print("train X size", len(X), " train X data dimension", X.shape)
-        print("train y size", len(y), " train X data dimension", y.shape)
-        print("train X data", X)
-        print("train y data", y)
+        print("train X size", len(X), " train X data dimension", X.shape, "train y size", len(y), " train X data dimension", y.shape)
+        #print("train X data", X)
+        #print("train y data", y)
         # fit network
-        print("Trained model with batch size", self.n_batch)
+        print("Training model with batch size", self.n_batch)
         model.summary()
         for i in range(self.n_epochs):
             model.fit(X, y, epochs=1, batch_size=self.n_batch, verbose=0, shuffle=False)
             model.reset_states()
+
+
         # source https://machinelearningmastery.com/use-different-batch-sizes-training-predicting-python-keras/
         # Create a new model with batch size 1 and give the trained weight, this allows the model
         # to be used to predict 1 step instead of batches
@@ -331,7 +342,7 @@ class MultiStepLSTMCompany(Company):
             new_model.add(LSTM(self.n_neurons))
             new_model.add(Dense(y.shape[1]))
         elif self.model_type == "bi":
-            new_model.add(Bidirectional(LSTM(self.n_neurons, stateful=True), batch_input_shape=(n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            new_model.add(Bidirectional(LSTM(self.n_neurons, stateful=True),batch_input_shape=(n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             new_model.add(Dense(y.shape[1]))
 
         elif self.model_type == "cnn":
@@ -405,7 +416,7 @@ class MultiStepLSTMCompany(Company):
             X, y = self.test_scaled[i, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
                    self.test_scaled[i, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
             pred = self.forecast_lstm(X)
-            print("X: ", X, "y: ", y, " pred: ", pred)
+            #print("X: ", X, "y: ", y, " pred: ", pred)
 
             # store forecast
             predictions.at[test_index[i]] = pred
@@ -428,11 +439,14 @@ class MultiStepLSTMCompany(Company):
             next_days_values = test_values[i: i + self.n_seq]
             actual.append(next_days_values)
         actual = np.array(actual)
-        print("actual", actual)
+        #print("actual", actual)
         # excludes the ones that do not have test data
-        predictions = np.array(predictions.tolist()[:-self.n_seq + 1])
+        if self.n_seq == 1:
+            predictions = np.array(predictions.tolist())
+        else:
+            predictions = np.array(predictions.tolist())[:-self.n_seq + 1]
 
-        print("predicted", predictions)
+        #print("predicted", predictions)
 
         if metric == "rmse":
             rmses = list()
@@ -547,12 +561,13 @@ class MultiStepLSTMCompany(Company):
         self.us_holidays = temp_holiday
 
     def create_file_name(self):
-        file_name = self.name + "_" + self.model_type + "_nlag_" + str(self.n_lag) \
-                    + "_nseq_" + str(self.n_seq) + "_ind_" \
-                    + str(len(self.input_tech_indicators_list)) \
-                    + "_train_" + self.train_start_date_string \
-                    + "_trainendteststart_" + self.train_end_test_start_date_string \
-                    + "_testend_" + self.test_end_date_string
+        file_name = self.name + "_" + self.model_type + "_nlag" + str(self.n_lag) \
+                    + "_nseq" + str(self.n_seq) + "_e" + str(self.n_epochs)\
+                    + "_b" + str(self.n_batch) + "_n" + str(self.n_neurons) \
+                    + "_ind" + str(len(self.input_tech_indicators_list)+1) \
+                    + "_train" + self.train_start_date_string \
+                    + "_trainendteststart" + self.train_end_test_start_date_string \
+                    + "_testend" + self.test_end_date_string
         file_name = file_name.replace("/", "-")
         return file_name
 

@@ -1,9 +1,7 @@
-import pandas as pd
 import datetime
 import holidays
 from alpha_vantage.timeseries import TimeSeries
 from alpha_vantage.techindicators import TechIndicators
-from time import sleep
 
 
 class Company(object):
