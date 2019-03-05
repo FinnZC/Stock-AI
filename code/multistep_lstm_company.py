@@ -101,7 +101,7 @@ class MultiStepLSTMCompany(Company):
             print("No existing data exist for this company so start downloading")
             while True:
                 try:
-                    price_series, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
+                    self.share_price_series, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
                     break
                 except KeyError:
                     # Could be that API has reached its limit
@@ -109,20 +109,21 @@ class MultiStepLSTMCompany(Company):
                     sleep(20)
                     pass
                 # Convert index of the DataFrame which is in the date string format into datetime
-            price_series.index = pd.to_datetime(price_series.index)
+            self.share_price_series.index = pd.to_datetime(self.share_price_series.index)
 
 
-        #display("train raw series", self.train_raw_series)
-        #display("test raw series", self.test_raw_series)
-        price_series = self.share_prices_series
+
         #display("price data series", len(price_series), price_series)
         if len(self.input_tech_indicators_list) > 0:
             # add additional technical indicators
-            combined = self.add_tech_indicators_dataframe(price_series, self.input_tech_indicators_list)
+            combined = self.add_tech_indicators_dataframe(self.share_prices_series, self.input_tech_indicators_list)
         else:
-            combined = price_series
+            combined = self.share_prices_series
 
         self.raw_pd = combined
+
+        #display("train raw series", self.train_raw_series)
+        #display("test raw series", self.test_raw_series)
 
         supervised_pd = self.timeseries_to_supervised(combined, self.n_lag, self.n_seq)
         # display("supervised", supervised_pd)
@@ -133,15 +134,18 @@ class MultiStepLSTMCompany(Company):
         #display("supervised_pd after differencing", supervised_pd)
 
         supervised_pd = self.get_filtered_series(supervised_pd, self.train_start_date_string, self.test_end_date_string)
-        self.train_raw_series = self.get_filtered_series(supervised_pd["Share Price(t)"],
-                                                         self.train_start_date_string,
-                                                         self.train_end_test_start_date_string)
-        self.test_raw_series = self.get_filtered_series(supervised_pd["Share Price(t)"],
-                                                         self.train_end_test_start_date_string,
-                                                         self.test_end_date_string)
+
 
         self.supervised_pd = supervised_pd
-        display("supervised filtered pd ", supervised_pd)
+        #display("supervised filtered pd ", supervised_pd)
+        train_raw_index = self.get_filtered_series(supervised_pd, self.train_start_date_string,
+                                                         self.train_end_test_start_date_string).index
+        self.train_raw_series = self.share_prices_series[train_raw_index]
+
+        test_raw_index = self.get_filtered_series(supervised_pd, self.train_end_test_start_date_string,
+                                                         self.test_end_date_string, start_delay=1).index
+        self.test_raw_series = self.share_prices_series[test_raw_index]
+
         cutoff = len(self.train_raw_series)
 
 
@@ -150,7 +154,7 @@ class MultiStepLSTMCompany(Company):
         test_supervised_values = supervised_pd.values[cutoff:]
 
 
-        display("test supervised values", test_supervised_values)
+        #display("test supervised values", test_supervised_values)
 
         #display("filtered train values", supervised_pd)
 
@@ -423,7 +427,7 @@ class MultiStepLSTMCompany(Company):
 
             # store forecast
             predictions.at[test_index[i]] = pred
-        display("Len(predictions)", len(predictions), predictions)
+        #display("Len(predictions)", len(predictions), predictions)
 
         # display("predictions before inverse transform", predictions)
         # inverse transform
@@ -444,7 +448,7 @@ class MultiStepLSTMCompany(Company):
         actual = np.array(actual)
 
         #print("actual", actual)
-        display("Len(actual)", len(actual), actual)
+        #display("Len(actual)", len(actual), actual)
 
         # excludes the ones that do not have test data
         if self.n_seq == 1:
@@ -452,7 +456,7 @@ class MultiStepLSTMCompany(Company):
         else:
             predictions = np.array(predictions.tolist())[:-self.n_seq + 1]
 
-        display("Len(predictions)", len(predictions), predictions)
+        #display("Len(predictions)", len(predictions), predictions)
 
         if metric == "rmse":
             rmses = list()

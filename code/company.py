@@ -47,5 +47,6 @@ class Company(object):
         end_date = self.convert_date_string_to_datetime(end_date_string)
         relevant_series_range = series[
             (series.index >= start_date) & (series.index <= end_date)]
+        relevant_series_range.dropna(inplace=True)
         return relevant_series_range
 
