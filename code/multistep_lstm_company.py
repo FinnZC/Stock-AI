@@ -94,8 +94,8 @@ class MultiStepLSTMCompany(Company):
         try:
             data = pd.read_csv("raw_data/" + self.name + "_raw_pd.csv", index_col=0)
             data.index = pd.to_datetime(data.index)
-            self.share_prices_series = data["Share Price"]
             self.raw_pd = data
+            self.share_prices_series = data["Share Price"]
             print("Retrieved price series and raw pd from disk")
         except FileNotFoundError:
             print("No existing data exist for this company so start downloading")
@@ -110,28 +110,8 @@ class MultiStepLSTMCompany(Company):
                     pass
                 # Convert index of the DataFrame which is in the date string format into datetime
             price_series.index = pd.to_datetime(price_series.index)
-            self.share_prices_series = price_series["5. adjusted close"]  # Series
-            self.share_prices_series.name = "Share Price"
 
-        self.train_raw_series = self.get_filtered_series(self.share_prices_series,
-                                                             self.train_start_date_string,
-                                                             self.train_end_test_start_date_string)
-        self.test_raw_series = self.get_filtered_series(self.share_prices_series,
-                                                            self.train_end_test_start_date_string,
-                                                            self.test_end_date_string, start_delay=1)
 
-        if self.n_batch == "full_batch":
-            self.n_batch = len(self.train_raw_series)
-        elif self.n_batch == "online":
-            self.n_batch = 1
-        elif self.n_batch == "half_batch":
-            half = int(len(self.train_raw_series)/2)
-            for i in range(half)[::-1]:
-                if len(self.train_raw_series) % i == 0:
-                    self.n_batch = i
-                    break
-        else:
-            raise ValueError("n_batch is not full_batch, half_batch, nor online. Must be one of them!")
         #display("train raw series", self.train_raw_series)
         #display("test raw series", self.test_raw_series)
         price_series = self.share_prices_series
@@ -153,13 +133,24 @@ class MultiStepLSTMCompany(Company):
         #display("supervised_pd after differencing", supervised_pd)
 
         supervised_pd = self.get_filtered_series(supervised_pd, self.train_start_date_string, self.test_end_date_string)
+        self.train_raw_series = self.get_filtered_series(supervised_pd["Share Price(t)"],
+                                                         self.train_start_date_string,
+                                                         self.train_end_test_start_date_string)
+        self.test_raw_series = self.get_filtered_series(supervised_pd["Share Price(t)"],
+                                                         self.train_end_test_start_date_string,
+                                                         self.test_end_date_string)
+
         self.supervised_pd = supervised_pd
-        #display("supervised filtered pd ", supervised_pd)
+        display("supervised filtered pd ", supervised_pd)
         cutoff = len(self.train_raw_series)
-        train_supervised_values = supervised_pd.values[:cutoff]
+
+
         # display("train supervised values", train_supervised_values)
+        train_supervised_values = supervised_pd.values[:cutoff]
         test_supervised_values = supervised_pd.values[cutoff:]
-        # display("test supervised values", test_supervised_values)
+
+
+        display("test supervised values", test_supervised_values)
 
         #display("filtered train values", supervised_pd)
 
@@ -169,6 +160,19 @@ class MultiStepLSTMCompany(Company):
         #display("scaled test supervised", scaled_test_supervised)
         self.train_scaled, self.test_scaled = scaled_train_supervised, scaled_test_supervised
         print("Preprocessed data in ", (time() - start_time)/60, "mins")
+
+        if self.n_batch == "full_batch":
+            self.n_batch = len(self.train_raw_series)
+        elif self.n_batch == "online":
+            self.n_batch = 1
+        elif self.n_batch == "half_batch":
+            half = int(len(self.train_raw_series)/2)
+            for i in range(half)[::-1]:
+                if len(self.train_raw_series) % i == 0:
+                    self.n_batch = i
+                    break
+        else:
+            raise ValueError("n_batch is not full_batch, half_batch, nor online. Must be one of them!")
 
     def update_train_test_set(self, start_train, end_train_start_test, end_test):
         print("Update the training and testing set with the specified dates: "
@@ -365,7 +369,6 @@ class MultiStepLSTMCompany(Company):
 
         print("\n\nNew model with batch size 1 for prediction")
         new_model.summary()
-
         return new_model
 
     # make one forecast with an LSTM,
@@ -420,7 +423,7 @@ class MultiStepLSTMCompany(Company):
 
             # store forecast
             predictions.at[test_index[i]] = pred
-            #display(predictions)
+        display("Len(predictions)", len(predictions), predictions)
 
         # display("predictions before inverse transform", predictions)
         # inverse transform
@@ -439,14 +442,17 @@ class MultiStepLSTMCompany(Company):
             next_days_values = test_values[i: i + self.n_seq]
             actual.append(next_days_values)
         actual = np.array(actual)
+
         #print("actual", actual)
+        display("Len(actual)", len(actual), actual)
+
         # excludes the ones that do not have test data
         if self.n_seq == 1:
             predictions = np.array(predictions.tolist())
         else:
             predictions = np.array(predictions.tolist())[:-self.n_seq + 1]
 
-        #print("predicted", predictions)
+        display("Len(predictions)", len(predictions), predictions)
 
         if metric == "rmse":
             rmses = list()
