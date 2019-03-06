@@ -25,7 +25,7 @@ def get_optimal_epochs_batch_neurons_params(symbol, start_train_date, end_train_
         # create directory
         os.mkdir("experiments")
 
-    filename = "./experiments/optimisation.csv"
+    filename = "./experiments/optimisation_no_differencing.csv"
     if not os.path.isfile(filename):
         # create new file
         with open(filename, "w", newline="") as csvfile:
@@ -81,8 +81,8 @@ def append_dict_to_csv(csv_file_name, csv_columns, dic):
 
 n_lags = [3, 5]
 n_seqs = [1, 3]
-n_epochs = [5000]# np.ceil(np.logspace(math.log(100, 10), math.log(5000, 10), num=10))
-n_neurons = [2,52] #np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=10))
+n_epochs = [100, 5000]# np.ceil(np.logspace(math.log(100, 10), math.log(5000, 10), num=10))
+n_neurons = [1,2,3,5,8,13,21,33,52] #np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=10))
 n_batches = ["full_batch"]  # , "half_batch", "online"]
 # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
 
