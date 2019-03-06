@@ -1,7 +1,7 @@
 import numpy as np
 import csv
 import os
-from multistep_lstm_company import MultiStepLSTMCompany
+from multistep_lstm_company_no_differencing import MultiStepLSTMCompanyNoDifferencing
 from datetime import date
 import math
 
@@ -40,7 +40,7 @@ def get_optimal_epochs_batch_neurons_params(symbol, start_train_date, end_train_
                         for m_t in model_types:
                             print("In process of training", symbol, "model type:", m_t, "n_lag:",
                                   n_l, "n_seq:", n_s, "n_epoch:", n_e, "n_batch:", n_b, "n_neurons:", n_n)
-                            obj = MultiStepLSTMCompany(symbol, start_train_date, end_train_start_test_date,
+                            obj = MultiStepLSTMCompanyNoDifferencing(symbol, start_train_date, end_train_start_test_date,
                                                        end_test_date, n_lag=n_l, n_seq=n_s, n_epochs=n_e,
                                                        n_neurons=n_n, n_batch=n_b, tech_indicators=indicators,
                                                        model_type=m_t)
