@@ -111,7 +111,11 @@ class MultiStepLSTMCompany(Company):
                 # Convert index of the DataFrame which is in the date string format into datetime
             self.share_price_series.index = pd.to_datetime(self.share_price_series.index)
 
-
+        if "price" in self.input_tech_indicators_list:
+            price_in_ind_list = True
+            self.input_tech_indicators_list.remove("price")
+        else:
+            price_in_ind_list = False
 
         #display("price data series", len(price_series), price_series)
         if len(self.input_tech_indicators_list) > 0:
@@ -120,15 +124,17 @@ class MultiStepLSTMCompany(Company):
         else:
             combined = self.share_prices_series
 
+
         self.raw_pd = combined
 
         #display("train raw series", self.train_raw_series)
         #display("test raw series", self.test_raw_series)
 
         supervised_pd = self.timeseries_to_supervised(combined, self.n_lag, self.n_seq)
+
         # display("supervised", supervised_pd)
         # delete unnecessary variables for prediction except price (should be var1)
-        supervised_pd = self.drop_irrelevant_y_var(supervised_pd)
+        supervised_pd = self.drop_irrelevant_y_var(supervised_pd, price_in_ind_list)
         #display("supervised_pd original", supervised_pd)
         supervised_pd = self.difference(supervised_pd)
         #display("supervised_pd after differencing", supervised_pd)
@@ -221,7 +227,7 @@ class MultiStepLSTMCompany(Company):
             agg.dropna(inplace=True)
         return agg
 
-    def drop_irrelevant_y_var(self, pd):
+    def drop_irrelevant_y_var(self, pd, price_exist):
         columns_to_drop = list()
         for i in range(len(self.input_tech_indicators_list)):
             columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t)")
@@ -229,7 +235,12 @@ class MultiStepLSTMCompany(Company):
         for i in range(len(self.input_tech_indicators_list)):
             for j in range(1, self.n_seq):
                 columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t+%d)" % j)
-        #display(pd)
+
+        if not price_exist:
+            for i in range(self.n_lag):
+                columns_to_drop.append("Share Price(t-%d)" % (i+1))
+
+        #print("columns_to_drop", columns_to_drop)
         return pd.drop(columns_to_drop, axis=1)
 
     # scale train and test data to [-1, 1]
@@ -462,7 +473,7 @@ class MultiStepLSTMCompany(Company):
             rmses = list()
             for i in range(self.n_seq):
                 rmse = math.sqrt(mean_squared_error(actual[:, i], predictions[:, i]))
-                print('t+%d RMSE: %f' % ((i + 1), rmse))
+                #print('t+%d RMSE: %f' % ((i + 1), rmse))
                 rmses.append(rmse)
             return rmses
 
@@ -472,7 +483,7 @@ class MultiStepLSTMCompany(Company):
             index = self.test_raw_series.index
             trends = list()
             for i in range(self.n_seq):
-                print("\nCalculating trend score for ", i + 1)
+                #print("\nCalculating trend score for ", i + 1)
                 correct_counts = 0
                 for j in range(len(predictions) - i):
                     actual = self.test_raw_series[index[j + i]]
@@ -589,9 +600,17 @@ class MultiStepLSTMCompany(Company):
         self.raw_pd.to_csv("raw_data/" + self.name + "_raw_pd.csv")
 
     # plot function for children classes, if run by parent, error would happen
-    def plot(self, predictions):
+    def plot(self, predictions, start_date_string=None, end_date_string=None):
         # line plot of observed vs predicted
         formatter = matplotlib.dates.DateFormatter('%d/%m/%Y')
+        if start_date_string is not None and start_date_string is not None:
+            predictions = self.get_filtered_series(predictions, start_date_string, end_date_string)
+            train_raw_series = self.get_filtered_series(self.train_raw_series, start_date_string, end_date_string)
+            test_raw_series = self.get_filtered_series(self.test_raw_series, start_date_string, end_date_string)
+
+        else:
+            train_raw_series = self.train_raw_series
+            test_raw_series = self.test_raw_series
         # display(predictions.index)
         for test_date in predictions.index:
             # n_seq consecutive days
@@ -602,13 +621,12 @@ class MultiStepLSTMCompany(Company):
                 x_axis.append(self.date_by_adding_business_days(from_date=x_axis[-1], add_days=1))
             plt.plot(x_axis, predictions[test_date], ':', marker='*', color="blue", label="Predicted prices")
 
-        plt.plot(self.train_raw_series.index, self.train_raw_series.values,
+        plt.plot(train_raw_series.index, train_raw_series.values,
                  '-', marker=".", label="Actual prices (Training data)")
 
         # test data not always possible
         try:
-            plt.plot(self.test_raw_series.index,
-                     self.test_raw_series.values,
+            plt.plot(test_raw_series.index, test_raw_series.values,
                      '-', marker=".", label="Actual prices (Test data)")
         except:
             # don't plot test data if not available

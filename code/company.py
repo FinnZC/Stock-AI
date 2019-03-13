@@ -10,7 +10,7 @@ class Company(object):
         # Create object to request data from Alpha Vantage
         self.time_series = TimeSeries(key='3OMS720IM6CRC3SV', output_format='pandas', indexing_type='date')
         self.tech_indicators = TechIndicators(key='3OMS720IM6CRC3SV', output_format='pandas')
-        self.all_tech_indicators = ["ad", "adosc", "adx", "adxr", "apo", "aroon", "aroonosc",
+        self.all_tech_indicators = ["price","ad", "adosc", "adx", "adxr", "apo", "aroon", "aroonosc",
                                     "bbands", "bop", "cci", "cmo", "dema", "dx", "ema", "ht_dcperiod",
                                     "ht_dcphase", "ht_phasor", "ht_sine", "ht_trendline", "ht_trendmode",
                                     "kama", "macd", "macdext", "mama", "mfi", "midpoint", "midprice",

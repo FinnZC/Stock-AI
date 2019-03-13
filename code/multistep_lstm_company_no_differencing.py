@@ -32,6 +32,12 @@ class MultiStepLSTMCompanyNoDifferencing(MultiStepLSTMCompany):
                 # Convert index of the DataFrame which is in the date string format into datetime
             self.share_price_series.index = pd.to_datetime(self.share_price_series.index)
 
+        if "price" in self.input_tech_indicators_list:
+            price_in_ind_list = True
+            self.input_tech_indicators_list.remove("price")
+        else:
+            price_in_ind_list = False
+
         # display("price data series", len(price_series), price_series)
         if len(self.input_tech_indicators_list) > 0:
             # add additional technical indicators
@@ -47,7 +53,7 @@ class MultiStepLSTMCompanyNoDifferencing(MultiStepLSTMCompany):
         supervised_pd = self.timeseries_to_supervised(combined, self.n_lag, self.n_seq)
         # display("supervised", supervised_pd)
         # delete unnecessary variables for prediction except price (should be var1)
-        supervised_pd = self.drop_irrelevant_y_var(supervised_pd)
+        supervised_pd = self.drop_irrelevant_y_var(supervised_pd, price_in_ind_list)
         # display("supervised_pd original", supervised_pd)
 
         supervised_pd = self.get_filtered_series(supervised_pd, self.train_start_date_string, self.test_end_date_string)
