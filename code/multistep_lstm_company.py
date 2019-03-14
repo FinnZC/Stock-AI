@@ -13,7 +13,7 @@ from keras.layers import TimeDistributed
 from keras.layers.convolutional import Conv1D
 from keras.layers.convolutional import MaxPooling1D
 from keras.layers import ConvLSTM2D
-
+from keras.utils import plot_model
 
 from sklearn.metrics import mean_squared_error
 from numpy import array
@@ -38,6 +38,7 @@ class MultiStepLSTMCompany(Company):
             self.input_tech_indicators_list = self.all_tech_indicators
         else:
             self.input_tech_indicators_list = tech_indicators
+        self.number_of_indicators = len(self.input_tech_indicators_list)
         self.train_start_date_string = train_start_date_string
         self.train_end_test_start_date_string = train_end_test_start_date_string
         self.test_end_date_string = test_end_date_string
@@ -118,11 +119,11 @@ class MultiStepLSTMCompany(Company):
             price_in_ind_list = False
 
         #display("price data series", len(price_series), price_series)
-        if len(self.input_tech_indicators_list) > 0:
+        if self.number_of_indicators > 0:
             # add additional technical indicators
             combined = self.add_tech_indicators_dataframe(self.share_prices_series, self.input_tech_indicators_list)
         else:
-            combined = self.share_prices_series
+            raise ValueError("No indicators passed")
 
 
         self.raw_pd = combined
@@ -229,10 +230,10 @@ class MultiStepLSTMCompany(Company):
 
     def drop_irrelevant_y_var(self, pd, price_exist):
         columns_to_drop = list()
-        for i in range(len(self.input_tech_indicators_list)):
+        for i in range(self.number_of_indicators):
             columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t)")
 
-        for i in range(len(self.input_tech_indicators_list)):
+        for i in range(self.number_of_indicators):
             for j in range(1, self.n_seq):
                 columns_to_drop.append(self.input_tech_indicators_list[i].upper() + "(t+%d)" % j)
 
@@ -274,16 +275,15 @@ class MultiStepLSTMCompany(Company):
         # reshape training into [samples, timesteps, features]
         print("Reseting the lstm model")
         self.lstm_model.reset_states()
-        total_indicators = len(self.input_tech_indicators_list) + 1
-        X, y = self.train_scaled[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
-               self.train_scaled[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
+        X, y = self.train_scaled[:, 0:self.n_lag * self.number_of_indicators], \
+               self.train_scaled[:, self.n_lag * self.number_of_indicators:]
 
         if self.model_type == "vanilla" or self.model_type == "stacked" or self.model_type == "bi":
-            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
+            X = X.reshape(X.shape[0], self.n_lag, self.number_of_indicators)
         elif self.model_type == "cnn":
-            X = X.reshape(X.shape[0], 1, self.n_lag, total_indicators)
+            X = X.reshape(X.shape[0], 1, self.n_lag, self.number_of_indicators)
         elif self.model_type == "conv":
-            X = X.reshape(X.shape[0], 1, 1, self.n_lag, total_indicators)
+            X = X.reshape(X.shape[0], 1, 1, self.n_lag, self.number_of_indicators)
         else:
             raise ValueError("self.model_type is not any of the specified")
         self.lstm_model.predict(X, batch_size=1)
@@ -292,41 +292,40 @@ class MultiStepLSTMCompany(Company):
     def fit_lstm(self, train):
         # reshape training into [samples, timesteps, features]
         # timestesp is 1 as there is 1 sample per day
-        X, y = train[:, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
-               train[:, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
-        total_indicators = len(self.input_tech_indicators_list) + 1
+        X, y = train[:, 0:self.n_lag * self.number_of_indicators], \
+               train[:, self.n_lag * self.number_of_indicators:]
         # design network
         model = Sequential()
         # source https://machinelearningmastery.com/how-to-develop-lstm-models-for-time-series-forecasting/
         if self.model_type == "vanilla":
-            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
-            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, total_indicators), stateful=True)) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            X = X.reshape(X.shape[0], self.n_lag, self.number_of_indicators)
+            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, self.number_of_indicators), stateful=True)) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             model.add(Dense(y.shape[1]))
         elif self.model_type == "stacked":
             # 2 hidden layers, but can be modified
-            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
-            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, total_indicators), #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            X = X.reshape(X.shape[0], self.n_lag, self.number_of_indicators)
+            model.add(LSTM(self.n_neurons, batch_input_shape=(self.n_batch, self.n_lag, self.number_of_indicators), #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
                            return_sequences=True, stateful=True))
             model.add(LSTM(self.n_neurons))
             model.add(Dense(y.shape[1]))
         elif self.model_type == "bi":
-            X = X.reshape(X.shape[0], self.n_lag, total_indicators)
-            model.add(Bidirectional(LSTM(self.n_neurons, stateful=True),batch_input_shape=(self.n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            X = X.reshape(X.shape[0], self.n_lag, self.number_of_indicators)
+            model.add(Bidirectional(LSTM(self.n_neurons, stateful=True),batch_input_shape=(self.n_batch, self.n_lag, self.number_of_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             model.add(Dense(y.shape[1]))
 
         elif self.model_type == "cnn":
-            X = X.reshape(X.shape[0], 1, self.n_lag, total_indicators)
+            X = X.reshape(X.shape[0], 1, self.n_lag, self.number_of_indicators)
             model.add(TimeDistributed(Conv1D(filters=64, kernel_size=1),
-                                      input_shape=(None, self.n_lag, total_indicators))) #batch_input_shape=(None, X.shape[1], X.shape[2])
+                                      input_shape=(None, self.n_lag, self.number_of_indicators))) #batch_input_shape=(None, X.shape[1], X.shape[2])
             model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
             model.add(TimeDistributed(Flatten()))
             model.add(LSTM(self.n_neurons))
             model.add(Dense(y.shape[1]))
 
         elif self.model_type == "conv":
-            X = X.reshape(X.shape[0], 1, 1, self.n_lag, total_indicators)
+            X = X.reshape(X.shape[0], 1, 1, self.n_lag, self.number_of_indicators)
             model.add(ConvLSTM2D(filters=64, kernel_size=(1, 2),
-                                 input_shape=(1, 1, self.n_lag, total_indicators)))
+                                 input_shape=(1, 1, self.n_lag, self.number_of_indicators)))
             model.add(Flatten())
             model.add(Dense(y.shape[1]))
         else:
@@ -344,7 +343,7 @@ class MultiStepLSTMCompany(Company):
             model.fit(X, y, epochs=1, batch_size=self.n_batch, verbose=0, shuffle=False)
             model.reset_states()
 
-
+        self.save_plot_model(model, note="fullbatch")
         # source https://machinelearningmastery.com/use-different-batch-sizes-training-predicting-python-keras/
         # Create a new model with batch size 1 and give the trained weight, this allows the model
         # to be used to predict 1 step instead of batches
@@ -352,21 +351,21 @@ class MultiStepLSTMCompany(Company):
         new_model = Sequential()
         # source https://machinelearningmastery.com/how-to-develop-lstm-models-for-time-series-forecasting/
         if self.model_type == "vanilla":
-            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, self.n_lag, total_indicators), stateful=True)) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, self.n_lag, self.number_of_indicators), stateful=True)) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             new_model.add(Dense(y.shape[1]))
         elif self.model_type == "stacked":
             # 2 hidden layers, but can be modified
-            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, self.n_lag, total_indicators), #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            new_model.add(LSTM(self.n_neurons, batch_input_shape=(n_batch, self.n_lag, self.number_of_indicators), #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
                            return_sequences=True, stateful=True))
             new_model.add(LSTM(self.n_neurons))
             new_model.add(Dense(y.shape[1]))
         elif self.model_type == "bi":
-            new_model.add(Bidirectional(LSTM(self.n_neurons, stateful=True),batch_input_shape=(n_batch, self.n_lag, total_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
+            new_model.add(Bidirectional(LSTM(self.n_neurons, stateful=True),batch_input_shape=(n_batch, self.n_lag, self.number_of_indicators))) #batch_input_shape=(self.n_batch, X.shape[1], X.shape[2])
             new_model.add(Dense(y.shape[1]))
 
         elif self.model_type == "cnn":
             new_model.add(TimeDistributed(Conv1D(filters=64, kernel_size=1),
-                                      input_shape=(None, self.n_lag, total_indicators))) #batch_input_shape=(None, X.shape[1], X.shape[2])
+                                      input_shape=(None, self.n_lag, self.number_of_indicators))) #batch_input_shape=(None, X.shape[1], X.shape[2])
             new_model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
             new_model.add(TimeDistributed(Flatten()))
             new_model.add(LSTM(self.n_neurons))
@@ -374,7 +373,7 @@ class MultiStepLSTMCompany(Company):
 
         elif self.model_type == "conv":
             new_model.add(ConvLSTM2D(filters=64, kernel_size=(1, 2),
-                                 input_shape=(1, 1, self.n_lag, total_indicators)))
+                                 input_shape=(1, 1, self.n_lag, self.number_of_indicators)))
             new_model.add(Flatten())
             new_model.add(Dense(y.shape[1]))
         else:
@@ -389,13 +388,12 @@ class MultiStepLSTMCompany(Company):
     # make one forecast with an LSTM,
     def forecast_lstm(self, X):
         # make forecast
-        total_indicators = len(self.input_tech_indicators_list) + 1
         if self.model_type == "vanilla" or self.model_type == "stacked" or self.model_type == "bi":
-            X = X.reshape(1, self.n_lag, total_indicators)
+            X = X.reshape(1, self.n_lag, self.number_of_indicators)
         elif self.model_type == "cnn":
-            X = X.reshape(1, 1, self.n_lag, total_indicators)
+            X = X.reshape(1, 1, self.n_lag, self.number_of_indicators)
         elif self.model_type == "conv":
-            X = X.reshape(1, 1, 1, self.n_lag, total_indicators)
+            X = X.reshape(1, 1, 1, self.n_lag, self.number_of_indicators)
         else:
             raise ValueError("self.model_type is not any of the specified")
         forecast = self.lstm_model.predict(X, batch_size=1)
@@ -431,8 +429,8 @@ class MultiStepLSTMCompany(Company):
 
         for i in range(len(self.test_scaled)):
             # make multi-step forecast
-            X, y = self.test_scaled[i, 0:self.n_lag * (len(self.input_tech_indicators_list) + 1)], \
-                   self.test_scaled[i, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
+            X, y = self.test_scaled[i, 0:self.n_lag * self.number_of_indicators], \
+                   self.test_scaled[i, self.n_lag * self.number_of_indicators:]
             pred = self.forecast_lstm(X)
             #print("X: ", X, "y: ", y, " pred: ", pred)
 
@@ -549,11 +547,11 @@ class MultiStepLSTMCompany(Company):
         pred_index = predictions.index
         for i in range(len(predictions)):
             # create array from forecast
-            pred = array([0 for i in range(self.n_lag * (len(self.input_tech_indicators_list) + 1))] + predictions[i])
+            pred = array([0 for i in range(self.n_lag * self.number_of_indicators)] + predictions[i])
             pred = pred.reshape(1, len(pred))
             # display("pred with place holders", pred)
             # invert scaling
-            inv_scale = self.scaler.inverse_transform(pred)[0, self.n_lag * (len(self.input_tech_indicators_list) + 1):]
+            inv_scale = self.scaler.inverse_transform(pred)[0, self.n_lag * self.number_of_indicators:]
             # inv_scale = inv_scale[0, :]
             #print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
                         # invert differencing
@@ -585,7 +583,7 @@ class MultiStepLSTMCompany(Company):
         file_name = self.name + "_" + self.model_type + "_nlag" + str(self.n_lag) \
                     + "_nseq" + str(self.n_seq) + "_e" + str(self.n_epochs)\
                     + "_b" + str(self.n_batch) + "_n" + str(self.n_neurons) \
-                    + "_ind" + str(len(self.input_tech_indicators_list)+1) \
+                    + "_ind" + str(self.number_of_indicators) \
                     + "_train" + self.train_start_date_string \
                     + "_trainendteststart" + self.train_end_test_start_date_string \
                     + "_testend" + self.test_end_date_string
@@ -595,6 +593,7 @@ class MultiStepLSTMCompany(Company):
     def save(self):
         self.save_lstm_model()
         self.save_object()
+        self.save_plot_model(self.lstm_model,note="1batch")
 
     def save_raw_pd_to_csv(self):
         self.raw_pd.to_csv("raw_data/" + self.name + "_raw_pd.csv")
@@ -619,7 +618,7 @@ class MultiStepLSTMCompany(Company):
             x_axis.append(test_date)
             for j in range(self.n_seq - 1):  # first one already added
                 x_axis.append(self.date_by_adding_business_days(from_date=x_axis[-1], add_days=1))
-            plt.plot(x_axis, predictions[test_date], ':', marker='*', color="blue", label="Predicted prices")
+            plt.plot(x_axis, predictions[test_date], ':', marker='*', color="black", label="Predicted prices")
 
         plt.plot(train_raw_series.index, train_raw_series.values,
                  '-', marker=".", label="Actual prices (Training data)")
@@ -650,3 +649,6 @@ class MultiStepLSTMCompany(Company):
         plt.ylabel("Share Price ($)")
         plt.title("Stock price prediction for " + self.name)
         plt.show()
+
+    def save_plot_model(self, model, note=""):
+        plot_model(model, show_shapes=True, rankdir="LR", to_file="models_visualisation/" + note + self.create_file_name() + ".png")
