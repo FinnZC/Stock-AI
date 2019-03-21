@@ -44,7 +44,19 @@ class MultiStepLSTMCompany(Company):
         self.test_end_date_string = test_end_date_string
         self.n_lag = n_lag
         self.n_seq = n_seq
-        self.n_epochs = n_epochs
+
+        if model_type == "vanilla":
+            self.n_epochs = 3238
+        elif model_type == "stacked":
+            self.n_epochs = 239
+        elif model_type == "bi":
+            self.n_epochs = 2097
+        elif model_type == "cnn":
+            self.n_epochs = 3238
+        elif model_type == "conv":
+            self.n_epochs = 100
+        else:
+            raise ValueError("model type", model_type, "does not exist!")
         self.n_batch = n_batch
         self.time_taken_to_train = 0
         self.preprocess_data()
@@ -344,7 +356,7 @@ class MultiStepLSTMCompany(Company):
             model.fit(X, y, epochs=1, batch_size=self.n_batch, verbose=0, shuffle=False)
             model.reset_states()
 
-        self.save_plot_model(model, note="fullbatch")
+        #self.save_plot_model(model, note="fullbatch")
         # source https://machinelearningmastery.com/use-different-batch-sizes-training-predicting-python-keras/
         # Create a new model with batch size 1 and give the trained weight, this allows the model
         # to be used to predict 1 step instead of batches
@@ -597,7 +609,7 @@ class MultiStepLSTMCompany(Company):
     def save(self):
         self.save_lstm_model()
         self.save_object()
-        self.save_plot_model(self.lstm_model,note="1batch")
+        #self.save_plot_model(self.lstm_model,note="1batch")
 
     def save_raw_pd_to_csv(self):
         self.raw_pd.to_csv("raw_data/" + self.name + "_raw_pd.csv")
