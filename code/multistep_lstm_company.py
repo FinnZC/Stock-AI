@@ -25,7 +25,7 @@ import pickle
 
 class MultiStepLSTMCompany(Company):
     def __init__(self, name, train_start_date_string, train_end_test_start_date_string, test_end_date_string,
-                 n_lag, n_seq, n_epochs,  n_batch=None, tech_indicators=[], model_type="vanilla"):
+                 n_lag, n_seq,  n_batch=None, tech_indicators=[], model_type="vanilla"):
         Company.__init__(self, name)
         self.scaler = None
         self.lstm_model = None
@@ -280,7 +280,7 @@ class MultiStepLSTMCompany(Company):
         self.time_taken_to_train = (time() - start_time)/60
         print("Finished fitting the model, time taken to train: %.1f mins" % self.time_taken_to_train)
         print("Saving object and model")
-        self.save()
+        #self.save()
 
     def reset(self):
         # forecast the entire training dataset to build up state for forecasting
