@@ -2,7 +2,7 @@ import numpy as np
 import csv
 import os
 from multistep_lstm_company import MultiStepLSTMCompany
-from datetime import date
+from datetime import datetime
 import math
 import pandas as pd
 
@@ -60,7 +60,7 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
                                        "End Test Date": obj.test_end_date_string,
                                        "Indicator Number": len(obj.input_tech_indicators_list),
                                        "Indicators":  ",".join(obj.input_tech_indicators_list),
-                                       "Trained Date": str(date.today()),
+                                       "Trained Date": str(datetime.now().strftime("%Y-%m-%d %H:%M:%S").today()),
                                        "Model Name": obj.create_file_name()}
                         for i in range(n_s):
                             dic["Trend_t+" + str(i + 1)] = trend_score[i]
