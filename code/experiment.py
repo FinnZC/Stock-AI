@@ -31,7 +31,8 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
         with open(filename, "w", newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
             writer.writeheader()
-
+    progress = 0
+    total_processes = len(n_lags) * len(n_seqs) * len(model_types) * len(indicators)
     for n_b in n_batches:
         for n_l in n_lags:
             for n_s in n_seqs:
@@ -66,6 +67,8 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
                             dic["APRE_t+" + str(i + 1)] = apre_score[i]
                             dic["RMSE_t+" + str(i + 1)] = lstm_score[i]
                         append_dict_to_csv(filename, csv_columns, dic)
+                        progress+=1
+                        print("--------------PROGRESS %d---------------" % (progress/total_processes *100))
 
 
 def append_dict_to_csv(csv_file_name, csv_columns, dic):
@@ -107,8 +110,8 @@ def experiment_1_univariate():
                            "minus_di", "minus_dm", "mom", "natr", "obv", "plus_di", "plus_dm",
                            "ppo", "roc", "rocr", "rsi", "sar", "sma", "stoch", "stochf", "stochrsi",
                            "t3", "tema", "trange", "trima", "trix", "ultsoc", "willr", "wma"]
-    indicators = [[ind] for ind in all_tech_indicators]
-    model_types = ["cnn", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
+    indicators = [[ind] for ind in all_tech_indicators][:40]
+    model_types = ["cnn"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
@@ -126,8 +129,10 @@ def experiment_2_part1():
     n_batches = ["full_batch"]  # , "half_batch", "online"]
     # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
 
-    indicators = [["ht_trendline"], ["ht_trendline","natr","midpoint","mfi","trix","mama","trima","obv","aroon","stoch","rocr","cci","plus_dm","t3","kama","ema","tema","aroonosc","ultsoc","sma","minus_di","trange","stochrsi","ht_phasor","adosc","bbands","ppo","stochf"]]
-    model_types = ["vanilla", "stacked", "bi", "cnn", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
+    indicators = [["ht_trendline"],
+                  ["ht_trendline","natr","midpoint","mfi","trix","mama","trima","obv","aroon","stoch","rocr","cci","plus_dm","t3","kama","ema","tema","aroonosc","ultsoc","sma","minus_di","trange","stochrsi","ht_phasor","adosc","bbands","ppo","stochf"],
+                  "all"]
+    model_types = ["vanilla", "stacked", "bi"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
@@ -146,7 +151,9 @@ def experiment_2_part2():
     n_batches = ["full_batch"]  # , "half_batch", "online"]
     # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
 
-    indicators = None # TODO: []
+    indicators = [["trix"],
+                  ["trix","mama","ad","ppo","trima","adx","minus_di","rsi","obv","natr","minus_dm","aroon","sar","cmo","stochrsi","stochf","wma","midprice","t3","macdext","rocr","ht_dcphase","roc","ht_phasor","ht_dcperiod","ht_sine","dema","aroonosc"],
+                  "all"]#
     model_types = ["vanilla", "stacked", "bi", "cnn", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
