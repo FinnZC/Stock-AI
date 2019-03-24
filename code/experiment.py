@@ -60,7 +60,7 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
                                        "End Test Date": obj.test_end_date_string,
                                        "Indicator Number": len(obj.input_tech_indicators_list),
                                        "Indicators":  ",".join(obj.input_tech_indicators_list),
-                                       "Trained Date": str(datetime.now().strftime("%Y-%m-%d %H:%M:%S").today()),
+                                       "Trained Date": str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
                                        "Model Name": obj.create_file_name()}
                         for i in range(n_s):
                             dic["Trend_t+" + str(i + 1)] = trend_score[i]
@@ -159,8 +159,8 @@ def experiment_2_part2():
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
 
-    for symbol in nasdaq_100_symbols:
-        experiment(file_output_name="experiment_2_part2", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
+    for symbol in nasdaq_100_symbols[::-1]:
+        experiment(file_output_name="experiment_2_part2_dice_reversed", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
 
@@ -203,3 +203,6 @@ def experiment_4():
         experiment(file_output_name="experiment_4", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
+
+experiment_2_part2()
+
