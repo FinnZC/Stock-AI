@@ -39,36 +39,42 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
                 for m_t in model_types:
                     for ind in indicators:
                         print("In process of training", symbol, "model type:", m_t, "n_lag:",
-                                 n_l, "n_seq:", n_s, "n_batch:", n_b,)
-                        obj = MultiStepLSTMCompany(symbol, start_train_date, end_train_start_test_date,
-                                                       end_test_date, n_lag=n_l, n_seq=n_s, n_batch=n_b, tech_indicators=ind,
-                                                       model_type=m_t)
-                        obj.train()
-                        predictions = obj.predict()
-                        trend_score = obj.score(metric="trend", predictions=predictions)
-                        lstm_score = obj.score(metric="rmse", predictions=predictions)
-                        apre_score = obj.score(metric="apre", predictions=predictions)
-                        dic = {"Company": symbol,
-                                       "LSTM Type": obj.model_type,
-                                       "n_epoch": obj.n_epochs,
-                                       "n_batch": obj.n_batch,
-                                       "n_lag": obj.n_lag,
-                                       "n_seq": obj.n_seq,
-                                       "Training Time": obj.time_taken_to_train,
-                                       "Start Train Date": obj.train_start_date_string,
-                                       "End Train/Start Test Date": obj.train_end_test_start_date_string,
-                                       "End Test Date": obj.test_end_date_string,
-                                       "Indicator Number": len(obj.input_tech_indicators_list),
-                                       "Indicators":  ",".join(obj.input_tech_indicators_list),
-                                       "Trained Date": str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                                       "Model Name": obj.create_file_name()}
-                        for i in range(n_s):
-                            dic["Trend_t+" + str(i + 1)] = trend_score[i]
-                            dic["APRE_t+" + str(i + 1)] = apre_score[i]
-                            dic["RMSE_t+" + str(i + 1)] = lstm_score[i]
-                        append_dict_to_csv(filename, csv_columns, dic)
+                                 n_l, "n_seq:", n_s, "n_batch:", n_b)
+                        row = {"Company": symbol,
+                                "LSTM Type": m_t,
+                               "n_lag": str(n_l),
+                               "n_seq": str(n_s)
+                               }
+                        if not row_exist(filename, row):
+                            obj = MultiStepLSTMCompany(symbol, start_train_date, end_train_start_test_date,
+                                                           end_test_date, n_lag=n_l, n_seq=n_s, n_batch=n_b, tech_indicators=ind,
+                                                           model_type=m_t)
+                            obj.train()
+                            predictions = obj.predict()
+                            trend_score = obj.score(metric="trend", predictions=predictions)
+                            lstm_score = obj.score(metric="rmse", predictions=predictions)
+                            apre_score = obj.score(metric="apre", predictions=predictions)
+                            dic = {"Company": symbol,
+                                           "LSTM Type": obj.model_type,
+                                           "n_epoch": obj.n_epochs,
+                                           "n_batch": obj.n_batch,
+                                           "n_lag": obj.n_lag,
+                                           "n_seq": obj.n_seq,
+                                           "Training Time": obj.time_taken_to_train,
+                                           "Start Train Date": obj.train_start_date_string,
+                                           "End Train/Start Test Date": obj.train_end_test_start_date_string,
+                                           "End Test Date": obj.test_end_date_string,
+                                           "Indicator Number": len(obj.input_tech_indicators_list),
+                                           "Indicators":  ",".join(obj.input_tech_indicators_list),
+                                           "Trained Date": str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                                           "Model Name": obj.create_file_name()}
+                            for i in range(n_s):
+                                dic["Trend_t+" + str(i + 1)] = trend_score[i]
+                                dic["APRE_t+" + str(i + 1)] = apre_score[i]
+                                dic["RMSE_t+" + str(i + 1)] = lstm_score[i]
+                            append_dict_to_csv(filename, csv_columns, dic)
                         progress+=1
-                        print("--------------PROGRESS %d---------------" % (progress/total_processes *100))
+                        print("--------------PROGRESS %d %%---------------" % (progress/total_processes *100))
 
 
 def append_dict_to_csv(csv_file_name, csv_columns, dic):
@@ -77,7 +83,18 @@ def append_dict_to_csv(csv_file_name, csv_columns, dic):
         writer.writerow(dic)
 
 
-
+def row_exist(filename, dic):
+    with open(filename) as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            row_dic = {k: row[k] for k in dic.keys() if k in row.keys()}
+            print(row_dic)
+            if row_dic == dic:
+                print(dic, " exist")
+                return True
+        else:
+            print(dic, " does not exist")
+            return False
 
 def eperiment_n_epochs():
     n_lags = [3]
@@ -159,8 +176,8 @@ def experiment_2_part2():
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
 
-    for symbol in nasdaq_100_symbols[::-1]:
-        experiment(file_output_name="experiment_2_part2_dice_reversed", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
+    for symbol in nasdaq_100_symbols:
+        experiment(file_output_name="experiment_2_part2", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
 
@@ -203,6 +220,4 @@ def experiment_4():
         experiment(file_output_name="experiment_4", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
-
-experiment_2_part2()
 
