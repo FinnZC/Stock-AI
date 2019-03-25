@@ -6,9 +6,16 @@ from datetime import datetime
 import math
 import pandas as pd
 
+global n_experiment
+global progress
+progress = 0
 
-def experiment(file_output_name, symbol, start_train_date, end_train_start_test_date, end_test_date, n_lags,
+
+def experiment(file_output_name,symbol, start_train_date, end_train_start_test_date, end_test_date, n_lags,
                                             n_seqs, n_batches, indicators, model_types):
+    global n_experiment
+    global progress
+
     # This is optimising parameters for n_epochs, n_batch, and n_neurons
     # param = {"n_epochs": n_epochs, "n_batch": n_batch, "n_neurons": n_neurons}
     csv_columns = ["Company", "LSTM Type", "n_epoch", "n_batch",
@@ -31,8 +38,6 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
         with open(filename, "w", newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
             writer.writeheader()
-    progress = 0
-    total_processes = len(n_lags) * len(n_seqs) * len(model_types) * len(indicators)
     for n_b in n_batches:
         for n_l in n_lags:
             for n_s in n_seqs:
@@ -40,10 +45,21 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
                     for ind in indicators:
                         print("In process of training", symbol, "model type:", m_t, "n_lag:",
                                  n_l, "n_seq:", n_s, "n_batch:", n_b)
+                        if ind == "all":
+                            csv_ind = ["ad", "adosc", "adx", "adxr", "apo", "aroon", "aroonosc",
+                                        "bbands", "bop", "cci", "cmo", "dema", "dx", "ema", "ht_dcperiod",
+                                        "ht_dcphase", "ht_phasor", "ht_sine", "ht_trendline", "ht_trendmode",
+                                        "kama", "macd", "macdext", "mama", "mfi", "midpoint", "midprice",
+                                        "minus_di", "minus_dm", "mom", "natr", "obv", "plus_di", "plus_dm",
+                                        "ppo", "roc", "rocr", "rsi", "sar", "sma", "stoch", "stochf", "stochrsi",
+                                        "t3", "tema", "trange", "trima", "trix", "ultsoc", "willr", "wma","price"]
+                        else:
+                            csv_ind = ind
                         row = {"Company": symbol,
                                 "LSTM Type": m_t,
                                "n_lag": str(n_l),
-                               "n_seq": str(n_s)
+                               "n_seq": str(n_s),
+                               "Indicators": ",".join(csv_ind),
                                }
                         if not row_exist(filename, row):
                             obj = MultiStepLSTMCompany(symbol, start_train_date, end_train_start_test_date,
@@ -74,7 +90,9 @@ def experiment(file_output_name, symbol, start_train_date, end_train_start_test_
                                 dic["RMSE_t+" + str(i + 1)] = lstm_score[i]
                             append_dict_to_csv(filename, csv_columns, dic)
                         progress+=1
-                        print("--------------PROGRESS %d %%---------------" % (progress/total_processes *100))
+                        print("progress:", progress)
+                        print("total", n_experiment)
+                        print("--------------PROGRESS %.2f %%---------------" % ((progress/n_experiment)*100))
 
 
 def append_dict_to_csv(csv_file_name, csv_columns, dic):
@@ -88,14 +106,14 @@ def row_exist(filename, dic):
         reader = csv.DictReader(csvfile)
         for row in reader:
             row_dic = {k: row[k] for k in dic.keys() if k in row.keys()}
-            print(row_dic)
             if row_dic == dic:
                 print(dic, " exist")
                 return True
         else:
             print(dic, " does not exist")
             return False
-
+"""
+# old experiment
 def eperiment_n_epochs():
     n_lags = [3]
     n_seqs = [3]
@@ -112,7 +130,7 @@ def eperiment_n_epochs():
     experiment(file_output_name="optimisation_e_poch_optimisation", symbol="AMZN", start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                end_test_date=end_test_date, n_lags=n_lags,
                n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
-
+"""
 
 def experiment_1_univariate():
     n_lags = [3]
@@ -132,7 +150,8 @@ def experiment_1_univariate():
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
-
+    global n_experiment
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types)
     experiment(file_output_name="experiment_1_univariate_laptop", symbol="AMZN", start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                end_test_date=end_test_date, n_lags=n_lags,
                n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
@@ -154,8 +173,9 @@ def experiment_2_part1():
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
-
-    for symbol in nasdaq_100_symbols[11:]:
+    global n_experiment
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 103
+    for symbol in nasdaq_100_symbols:
         experiment(file_output_name="experiment_2_part1", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
@@ -176,7 +196,8 @@ def experiment_2_part2():
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
-
+    global n_experiment
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 103
     for symbol in nasdaq_100_symbols:
         experiment(file_output_name="experiment_2_part2", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
@@ -196,7 +217,8 @@ def experiment_3():
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
-
+    global n_experiment
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 103
     for symbol in nasdaq_100_symbols:
         experiment(file_output_name="experiment_3", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
@@ -216,7 +238,8 @@ def experiment_4():
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
-
+    global n_experiment
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 103
     for symbol in nasdaq_100_symbols:
         experiment(file_output_name="experiment_4", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
