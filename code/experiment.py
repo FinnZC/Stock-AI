@@ -149,12 +149,13 @@ def experiment_2_part1():
     indicators = [["ht_trendline"],
                   ["ht_trendline","natr","midpoint","mfi","trix","mama","trima","obv","aroon","stoch","rocr","cci","plus_dm","t3","kama","ema","tema","aroonosc","ultsoc","sma","minus_di","trange","stochrsi","ht_phasor","adosc","bbands","ppo","stochf"],
                   "all"]
+
     model_types = ["vanilla", "stacked", "bi"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
 
-    for symbol in nasdaq_100_symbols:
+    for symbol in nasdaq_100_symbols[11:]:
         experiment(file_output_name="experiment_2_part1", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
@@ -220,4 +221,3 @@ def experiment_4():
         experiment(file_output_name="experiment_4", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
-
