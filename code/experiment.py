@@ -129,15 +129,19 @@ def experiment_2_part1():
     n_batches = ["full_batch"]  # , "half_batch", "online"]
     # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
 
+<<<<<<< Updated upstream
     indicators = [["ht_trendline"],
                   ["ht_trendline","natr","midpoint","mfi","trix","mama","trima","obv","aroon","stoch","rocr","cci","plus_dm","t3","kama","ema","tema","aroonosc","ultsoc","sma","minus_di","trange","stochrsi","ht_phasor","adosc","bbands","ppo","stochf"],
                   "all"]
+=======
+    indicators = ["all"]
+>>>>>>> Stashed changes
     model_types = ["vanilla", "stacked", "bi"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
     end_test_date = "01/01/2019"
 
-    for symbol in nasdaq_100_symbols:
+    for symbol in nasdaq_100_symbols[11:]:
         experiment(file_output_name="experiment_2_part1", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
@@ -204,5 +208,11 @@ def experiment_4():
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
 
+<<<<<<< Updated upstream
 experiment_2_part2()
 
+=======
+
+
+experiment_2_part2()
+>>>>>>> Stashed changes
