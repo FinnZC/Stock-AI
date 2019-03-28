@@ -195,7 +195,7 @@ def experiment_2_part2():
     global n_experiment
     n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 103
     for symbol in nasdaq_100_symbols:
-        experiment(file_output_name="experiment_2_part2", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
+        experiment(file_output_name="experiment_2_part2_laptop_reversed", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
 
@@ -204,13 +204,14 @@ def experiment_3():
     data = pd.read_csv(os.path.join(os.getcwd(), 'symbols', 'nasdaq100list_feb2019.csv'))
     nasdaq_100_symbols = data["Symbol"].values.tolist()
 
-    n_lags = np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=5)).astype(int)
-    n_seqs = np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=5)).astype(int)
+    n_lags = np.ceil(np.logspace(math.log(1, 10), math.log(10, 10), num=4)).astype(int)
+    n_seqs = np.ceil(np.logspace(math.log(1, 10), math.log(10, 10), num=4)).astype(int)
 
     n_batches = ["full_batch"]  # , "half_batch", "online"]
     # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
 
-    indicators = None # TODO
+    ranked_ind = ["trix","mama","ad","ppo","trima","adx","minus_di","rsi","obv","natr","minus_dm","aroon","sar","cmo","stochrsi","stochf","wma","midprice","t3","macdext","rocr","ht_dcphase","roc","ht_phasor","ht_dcperiod","ht_sine","dema","aroonosc","sma","bop","apo","adosc","willr","mfi","ultsoc","macd","dx","kama","trange","adxr","bbands","midpoint","ht_trendline","tema","ht_trendmode","stoch","plus_di","cci","plus_dm","ema","mom","price"]
+    indicators = [ranked_ind[:x] for x in np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=4)).astype(int)]
     model_types = ["bi", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
     start_train_date = "01/01/2000"
     end_train_start_test_date = "01/01/2018"
