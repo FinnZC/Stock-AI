@@ -102,16 +102,20 @@ def append_dict_to_csv(csv_file_name, csv_columns, dic):
 
 
 def row_exist(filename, dic):
-    with open(filename) as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            row_dic = {k: row[k] for k in dic.keys() if k in row.keys()}
-            if row_dic == dic:
-                print(dic, " exist")
-                return True
-        else:
-            print(dic, " does not exist")
-            return False
+    try:
+        with open(filename) as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                row_dic = {k: row[k] for k in dic.keys() if k in row.keys()}
+                if row_dic == dic:
+                    print(dic, " exist")
+                    return True
+            else:
+                print(dic, " does not exist")
+                return False
+    except:
+        # sometimes error happens
+        return True
 """
 # old experiment
 def eperiment_n_epochs():
@@ -204,7 +208,8 @@ def experiment_3():
     data = pd.read_csv(os.path.join(os.getcwd(), 'symbols', 'nasdaq100list_feb2019.csv'))
     nasdaq_100_symbols = data["Symbol"].values.tolist()
 
-    n_lags = np.ceil(np.logspace(math.log(1, 10), math.log(10, 10), num=4)).astype(int)
+    n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(10, 10), num=4)).astype(int))
+    n_lags.remove(1)
     n_seqs = np.ceil(np.logspace(math.log(1, 10), math.log(10, 10), num=4)).astype(int)
 
     n_batches = ["full_batch"]  # , "half_batch", "online"]
@@ -218,7 +223,7 @@ def experiment_3():
     end_test_date = "01/01/2019"
     global n_experiment
     n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 103
-    for symbol in nasdaq_100_symbols:
-        experiment(file_output_name="experiment_3", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
+    for symbol in nasdaq_100_symbols[60:80][::-1]:
+        experiment(file_output_name="experiment_3_laptop", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                    end_test_date=end_test_date, n_lags=n_lags,
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
