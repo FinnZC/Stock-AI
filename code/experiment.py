@@ -102,20 +102,21 @@ def append_dict_to_csv(csv_file_name, csv_columns, dic):
 
 
 def row_exist(filename, dic):
-    try:
-        with open(filename) as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
+    with open(filename) as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            try:
                 row_dic = {k: row[k] for k in dic.keys() if k in row.keys()}
                 if row_dic == dic:
                     print(dic, " exist")
                     return True
-            else:
-                print(dic, " does not exist")
-                return False
-    except:
-        # sometimes error happens
-        return True
+            except:
+                # skip exceptions which are wrongly formatted rows
+                pass
+        else:
+            print(dic, " does not exist")
+            return False
+
 """
 # old experiment
 def eperiment_n_epochs():
