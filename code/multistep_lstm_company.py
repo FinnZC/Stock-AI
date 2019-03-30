@@ -109,11 +109,12 @@ class MultiStepLSTMCompany(Company):
             self.raw_pd = data
             self.share_prices_series = data["Share Price"]
             print("Retrieved price series and raw pd from disk")
-        except FileNotFoundError:
+        except:
             print("No existing data exist for this company so start downloading")
             while True:
                 try:
-                    self.share_price_series, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
+                    data, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
+                    self.share_prices_series = data["5. adjusted close"]
                     break
                 except KeyError:
                     # Could be that API has reached its limit
@@ -121,7 +122,7 @@ class MultiStepLSTMCompany(Company):
                     sleep(20)
                     pass
                 # Convert index of the DataFrame which is in the date string format into datetime
-            self.share_price_series.index = pd.to_datetime(self.share_price_series.index)
+            self.share_prices_series.index = pd.to_datetime(self.share_prices_series.index)
 
         if "price" in self.input_tech_indicators_list:
             price_in_ind_list = True
@@ -129,7 +130,7 @@ class MultiStepLSTMCompany(Company):
         else:
             price_in_ind_list = False
 
-        #display("price data series", len(price_series), price_series)
+        display("price data series", len(self.share_prices_series), self.share_prices_series)
         if self.number_of_indicators > 0:
             # add additional technical indicators
             combined = self.add_tech_indicators_dataframe(self.share_prices_series, self.input_tech_indicators_list)
