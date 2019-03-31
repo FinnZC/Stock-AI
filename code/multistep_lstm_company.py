@@ -115,6 +115,8 @@ class MultiStepLSTMCompany(Company):
                 try:
                     data, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
                     self.share_prices_series = data["5. adjusted close"]
+                    self.share_prices_series.rename("Share Price")
+                    #display(self.share_prices_series)
                     break
                 except KeyError:
                     # Could be that API has reached its limit
