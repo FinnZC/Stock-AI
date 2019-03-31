@@ -130,7 +130,7 @@ class MultiStepLSTMCompany(Company):
         else:
             price_in_ind_list = False
 
-        display("price data series", len(self.share_prices_series), self.share_prices_series)
+        #display("price data series", len(self.share_prices_series), self.share_prices_series)
         if self.number_of_indicators > 0:
             # add additional technical indicators
             combined = self.add_tech_indicators_dataframe(self.share_prices_series, self.input_tech_indicators_list)
