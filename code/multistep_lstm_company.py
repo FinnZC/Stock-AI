@@ -82,7 +82,7 @@ class MultiStepLSTMCompany(Company):
                 print("Downloading ", ind_name)
                 data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
                 #print(meta_data)
-                data.index = pd.to_datetime(data.index, format="%d/%m/%Y")
+                data.index = pd.to_datetime(data.index, format="%Y-%m-%d")
                 data.rename(columns={data.columns[0]: ind_name.upper()}, inplace=True)
             else:
                 #print("Add from existing raw_pd ", ind_name)
@@ -90,7 +90,7 @@ class MultiStepLSTMCompany(Company):
         else:
             print("Downloading ", ind_name)
             data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
-            data.index = pd.to_datetime(data.index, format="%Y/%m/%d")
+            data.index = pd.to_datetime(data.index, format="%Y-%m-%d")
             data.rename(columns={data.columns[0]: ind_name.upper()}, inplace=True)
 
         return data
@@ -105,7 +105,9 @@ class MultiStepLSTMCompany(Company):
         start_time = time()
         try:
             data = pd.read_csv("raw_data/" + self.name + "_raw_pd.csv", index_col=0)
-            data.index = pd.to_datetime(data.index, format="%d/%m/%Y")
+            #display(data)
+            data.index = pd.to_datetime(data.index, format="%Y-%m-%d")
+            #display(data.index)
             self.raw_pd = data
             self.share_prices_series = data["Share Price"]
             print("Retrieved price series and raw pd from disk")
@@ -125,7 +127,7 @@ class MultiStepLSTMCompany(Company):
                     pass
             # Convert index of the DataFrame which is in the date string format into datetime
             #display(self.share_prices_series)
-            self.share_prices_series.index = pd.to_datetime(self.share_prices_series.index, format="%Y/%m/%d")
+            self.share_prices_series.index = pd.to_datetime(self.share_prices_series.index, format="%Y-%m-%d")
 
         if "price" in self.input_tech_indicators_list:
             price_in_ind_list = True
