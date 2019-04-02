@@ -106,9 +106,11 @@ class MultiStepLSTMCompany(Company):
         try:
             data = pd.read_csv("raw_data/" + self.name + "_raw_pd.csv", index_col=0)
             #display(data)
-            data.index = pd.to_datetime(data.index, format="%Y-%m-%d")
-            #display(data.index)
+            display(data)
+            data.index = pd.to_datetime(data.index, format="%d/%m/%Y")
+            display(data.index)
             self.raw_pd = data
+
             self.share_prices_series = data["Share Price"]
             print("Retrieved price series and raw pd from disk")
         except:
