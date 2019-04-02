@@ -340,8 +340,8 @@ def benchmark_lin2009short():
                   "mfi", "ultsoc", "macd", "dx", "kama", "trange", "adxr", "bbands", "midpoint", "ht_trendline", "tema",
                   "ht_trendmode", "stoch", "plus_di", "cci", "plus_dm", "ema", "mom", "price"]
     indicators = [ranked_ind[:x] for x in np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=4)).astype(int)]
-    symbols = ["AHC","CIEN","GD","HRB","IR","JCP","NBR","NSC","PBI","PPL"
-               ,"PSA","RHI","SFA","SRE","THC","UIS","USB", "AMD","BBT"]
+    symbols = ["AHC", "AMD","BBT", "CIEN","GD","HRB","IR","JCP","NBR","NSC","PBI","PPL"
+               ,"PSA","RHI","SFA","SRE","THC","UIS","USB"]
     # Remove: FDO, ACE, "GTW","LXK",, "CPN",,"KMG"
     for symbol in symbols:
         try:
