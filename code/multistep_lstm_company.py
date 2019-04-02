@@ -106,9 +106,9 @@ class MultiStepLSTMCompany(Company):
         try:
             data = pd.read_csv("raw_data/" + self.name + "_raw_pd.csv", index_col=0)
             #display(data)
-            display(data)
+            #display(data)
             data.index = pd.to_datetime(data.index, format="%d/%m/%Y")
-            display(data.index)
+            #display(data.index)
             self.raw_pd = data
 
             self.share_prices_series = data["Share Price"]
