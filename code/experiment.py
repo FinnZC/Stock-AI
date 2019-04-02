@@ -340,8 +340,14 @@ def benchmark_lin2009short():
                   "mfi", "ultsoc", "macd", "dx", "kama", "trange", "adxr", "bbands", "midpoint", "ht_trendline", "tema",
                   "ht_trendmode", "stoch", "plus_di", "cci", "plus_dm", "ema", "mom", "price"]
     indicators = [ranked_ind[:x] for x in np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=4)).astype(int)]
-    for symbol in ["ACE","AHC","AMD","BBT","CIEN","CPN","FDO","GD","GTW","HRB","IR","JCP","KMG","LXK","NBR","NSC","PBI","PPL","PSA","RHI","SFA","SRE","THC","UIS","USB"]:
-        experiment(file_output_name="benchmarking_lin", symbol=symbol, start_train_date=start_train_date,
-                   end_train_start_test_date=end_train_start_test_date,
-                   end_test_date=end_test_date, n_lags=n_lags,
-                   n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
+    symbols = ["AHC","CIEN","GD","HRB","IR","JCP","NBR","NSC","PBI","PPL"
+               ,"PSA","RHI","SFA","SRE","THC","UIS","USB", "AMD","BBT"]
+    # Remove: FDO, ACE, "GTW","LXK",, "CPN",,"KMG"
+    for symbol in symbols:
+        try:
+            experiment(file_output_name="benchmarking_lin", symbol=symbol, start_train_date=start_train_date,
+                       end_train_start_test_date=end_train_start_test_date,
+                       end_test_date=end_test_date, n_lags=n_lags,
+                       n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
+        except:
+            print("Exception entered for", symbol)
