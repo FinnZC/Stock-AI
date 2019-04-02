@@ -156,7 +156,7 @@ class MultiStepLSTMCompany(Company):
         #display("test raw series", self.test_raw_series)
 
         supervised_pd = self.timeseries_to_supervised(combined, self.n_lag, self.n_seq)
-        display(supervised_pd)
+        #display(supervised_pd)
         # display("supervised", supervised_pd)
         # delete unnecessary variables for prediction except price (should be var1)
         supervised_pd = self.drop_irrelevant_y_var(supervised_pd, price_in_ind_list)
