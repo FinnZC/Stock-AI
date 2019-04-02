@@ -233,7 +233,7 @@ def experiment_3():
                    n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
 
 
-def benchmark_abraham2004modeling():
+def benchmark_abraham2004modeling_nasdaq():
     n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=15)).astype(int))
     n_seqs = list(np.ceil(np.logspace(math.log(1, 10), math.log(10, 10), num=1)).astype(int))
 
@@ -247,7 +247,44 @@ def benchmark_abraham2004modeling():
     end_test_date = "11/01/2002"
     global n_experiment
     n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types)
-    for symbol in ["NDX", "NDX", "NDX", "NDX", "NDX", "NDX", "NDX", "NDX", "NDX", "NDX"]:
-        experiment(file_output_name="benchmarking", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
+    for symbol in ["NDX"]:
+        experiment(file_output_name="benchmarking_abraham", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
+                       end_test_date=end_test_date, n_lags=n_lags,
+                       n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
+
+def benchmark_abraham2004modeling_nsei():
+    n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=15)).astype(int))
+    n_seqs = list(np.ceil(np.logspace(math.log(1, 10), math.log(10, 10), num=1)).astype(int))
+
+    n_batches = ["full_batch"]  # , "half_batch", "online"]
+    # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
+
+    indicators = [["price"]]
+    model_types = ["bi", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
+    start_train_date = "01/01/1998"
+    end_train_start_test_date = "15/12/1999"
+    end_test_date = "01/12/2001"
+    global n_experiment
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types)
+    for symbol in ["NSEI"]:
+        experiment(file_output_name="benchmarking_abraham", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
+                       end_test_date=end_test_date, n_lags=n_lags,
+                       n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
+
+
+def benchmark_hansson2017stock():
+    n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=15)).astype(int))
+    n_seqs = [1]
+    indicators = [["price"]]
+    n_batches = ["full_batch"]  # , "half_batch", "online"]
+    # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
+    model_types = ["bi", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
+    start_train_date = "02/01/2009"
+    end_train_start_test_date = "13/08/2014"
+    end_test_date = "28/04/2017"
+    global n_experiment
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types)
+    for symbol in ["SPX", "BSVP", "OMX"]:
+        experiment(file_output_name="benchmarking_hansson", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                        end_test_date=end_test_date, n_lags=n_lags,
                        n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
