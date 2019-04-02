@@ -90,7 +90,7 @@ class MultiStepLSTMCompany(Company):
         else:
             print("Downloading ", ind_name)
             data, meta_data = getattr(self.tech_indicators, "get_" + ind_name)(self.name, interval="daily")
-            data.index = pd.to_datetime(data.index, format="%d/%m/%Y")
+            data.index = pd.to_datetime(data.index, format="%Y/%m/%d")
             data.rename(columns={data.columns[0]: ind_name.upper()}, inplace=True)
 
         return data
@@ -123,8 +123,9 @@ class MultiStepLSTMCompany(Company):
                     print("Retrying to download price series")
                     sleep(20)
                     pass
-                # Convert index of the DataFrame which is in the date string format into datetime
-            self.share_prices_series.index = pd.to_datetime(self.share_prices_series.index, format="%d/%m/%Y")
+            # Convert index of the DataFrame which is in the date string format into datetime
+            #display(self.share_prices_series)
+            self.share_prices_series.index = pd.to_datetime(self.share_prices_series.index, format="%Y/%m/%d")
 
         if "price" in self.input_tech_indicators_list:
             price_in_ind_list = True
