@@ -240,8 +240,7 @@ def benchmark_abraham2004modeling_nasdaq():
     n_batches = ["full_batch"]  # , "half_batch", "online"]
     # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
 
-    ranked_ind = ["trix","mama","ad","ppo","trima","adx","minus_di","rsi","obv","natr","minus_dm","aroon","sar","cmo","stochrsi","stochf","wma","midprice","t3","macdext","rocr","ht_dcphase","roc","ht_phasor","ht_dcperiod","ht_sine","dema","aroonosc","sma","bop","apo","adosc","willr","mfi","ultsoc","macd","dx","kama","trange","adxr","bbands","midpoint","ht_trendline","tema","ht_trendmode","stoch","plus_di","cci","plus_dm","ema","mom","price"]
-    indicators = [ranked_ind[:x] for x in np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=4)).astype(int)]
+    indicators = [["price"]]
     model_types = ["bi", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
     start_train_date = "11/01/1995"
     end_train_start_test_date = "11/07/1998"
@@ -285,7 +284,7 @@ def benchmark_hansson2017stock():
     end_test_date = "28/04/2017"
     global n_experiment
     n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 3
-    for symbol in ["BSVP", "OMX"]:
+    for symbol in ["BVSP", "OMX"]:
         experiment(file_output_name="benchmarking_hansson", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                        end_test_date=end_test_date, n_lags=n_lags,
                        n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
