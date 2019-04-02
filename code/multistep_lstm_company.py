@@ -107,7 +107,13 @@ class MultiStepLSTMCompany(Company):
             data = pd.read_csv("raw_data/" + self.name + "_raw_pd.csv", index_col=0)
             #display(data)
             #display(data)
-            data.index = pd.to_datetime(data.index, format="%d/%m/%Y")
+            try:
+                data.index = pd.to_datetime(data.index, format="%d/%m/%Y")
+            except:
+                try:
+                    data.index = pd.to_datetime(data.index, format="%Y/%m/%d")
+                except:
+                    raise ValueError("Formatting to_datetime doesn't work on the input")
             #display(data.index)
             self.raw_pd = data
 
@@ -119,8 +125,8 @@ class MultiStepLSTMCompany(Company):
                 try:
                     data, metadata = self.time_series.get_daily_adjusted(symbol=self.name, outputsize='full')
                     self.share_prices_series = data["5. adjusted close"]
-                    self.share_prices_series.rename("Share Price")
-                    #display(self.share_prices_series)
+                    self.share_prices_series= self.share_prices_series.rename("Share Price")
+
                     break
                 except KeyError:
                     # Could be that API has reached its limit
@@ -150,7 +156,7 @@ class MultiStepLSTMCompany(Company):
         #display("test raw series", self.test_raw_series)
 
         supervised_pd = self.timeseries_to_supervised(combined, self.n_lag, self.n_seq)
-
+        display(supervised_pd)
         # display("supervised", supervised_pd)
         # delete unnecessary variables for prediction except price (should be var1)
         supervised_pd = self.drop_irrelevant_y_var(supervised_pd, price_in_ind_list)
