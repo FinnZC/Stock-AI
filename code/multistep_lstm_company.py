@@ -567,8 +567,24 @@ class MultiStepLSTMCompany(Company):
             #print("Inverse difference Pred: ", forecast[i], "  + Reference Price:", last_ob, " = ", new)
             last_ob = new
 
-            # print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
-            # invert differencing
+        #print("Final inverted values: ", inverted)
+        return inverted
+
+    # inverse data transform on forecasts
+    def inverse_transform(self, series, predictions, n_test):
+        # walk-forward validation on the test data
+        inverted_predictions = pd.Series()
+        pred_index = predictions.index
+        for i in range(len(predictions)):
+            # create array from forecast
+            pred = array([0 for i in range(self.n_lag * self.number_of_indicators)] + predictions[i])
+            pred = pred.reshape(1, len(pred))
+            # display("pred with place holders", pred)
+            # invert scaling
+            inv_scale = self.scaler.inverse_transform(pred)[0, self.n_lag * self.number_of_indicators:]
+            # inv_scale = inv_scale[0, :]
+            #print("Inverse scale  Original Pred: ", pred, "   After Scaling: ", inv_scale)
+                        # invert differencing
             # -1 to get the t-1 price
             index = len(series) - n_test + i - 1
             last_ob = series.values[index]
@@ -595,7 +611,7 @@ class MultiStepLSTMCompany(Company):
 
     def create_file_name(self):
         file_name = self.name + "_" + self.model_type + "_nlag" + str(self.n_lag) \
-                    + "_nseq" + str(self.n_seq) + "_e" + str(self.n_epochs) \
+                    + "_nseq" + str(self.n_seq) + "_e" + str(self.n_epochs)\
                     + "_b" + str(self.n_batch) + "_n" + str(self.number_of_indicators) \
                     + "_ind" + str(self.number_of_indicators) \
                     + "_train" + self.train_start_date_string \
@@ -607,29 +623,13 @@ class MultiStepLSTMCompany(Company):
     def save(self):
         self.save_lstm_model()
         self.save_object()
-        # self.save_plot_model(self.lstm_model,note="1batch")
+        #self.save_plot_model(self.lstm_model,note="1batch")
 
     def save_raw_pd_to_csv(self):
         self.raw_pd.to_csv("raw_data/" + self.name + "_raw_pd.csv")
 
     # plot function for children classes, if run by parent, error would happen
-    def
-    #print("Final inverted values: ", inverted)
-        return inverted
-
-    # inverse data transform on forecasts
-    def inverse_transform(self, series, predictions, n_test):
-        # walk-forward validation on the test data
-        inverted_predictions = pd.Series()
-        pred_index = predictions.index
-        for i in range(len(predictions)):
-            # create array from forecast
-            pred = array([0 for i in range(self.n_lag * self.number_of_indicators)] + predictions[i])
-            pred = pred.reshape(1, len(pred))
-            # display("pred with place holders", pred)
-            # invert scaling
-            inv_scale = self.scaler.inverse_transform(pred)[0, self.n_lag * self.number_of_indicators:]
-            # inv_scale = inv_scale[0, :]plot(self, predictions, start_date_string=None, end_date_string=None):
+    def plot(self, predictions, start_date_string=None, end_date_string=None):
         # line plot of observed vs predicted
         formatter = matplotlib.dates.DateFormatter('%d/%m/%Y')
         if start_date_string is not None and start_date_string is not None:
