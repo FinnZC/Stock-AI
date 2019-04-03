@@ -297,22 +297,25 @@ def benchmark_hansson2017stock():
                        n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
 
 def benchmark_gupta2012stock():
-    n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=15)).astype(int))
+    n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=10)).astype(int))
     n_seqs = [1]
     indicators = [["price"]]
     n_batches = ["full_batch"]  # , "half_batch", "online"]
     # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
     model_types = ["bi", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
-    start_train_date = "02/01/2009"
-    end_train_start_test_date = "13/08/2014"
-    end_test_date = "28/04/2017"
+    start_train_date = "12/08/2002"
+    end_train_start_test_date = "04/11/2009"
+    end_test_date = "23/09/2011"
     global n_experiment
-    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 4
+    n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * 3*4
     for symbol in ["TISC"]:
         experiment(file_output_name="benchmarking_gupta", symbol=symbol, start_train_date=start_train_date, end_train_start_test_date=end_train_start_test_date,
                        end_test_date=end_test_date, n_lags=n_lags,
                        n_seqs=n_seqs, n_batches=n_batches, indicators=indicators, model_types=model_types)
 
+    start_train_date = "10/02/2003"
+    end_train_start_test_date = "10/09/2004"
+    end_test_date = "21/01/2005"
     ranked_ind = ["trix","mama","ad","ppo","trima","adx","minus_di","rsi","obv","natr","minus_dm","aroon","sar","cmo","stochrsi","stochf","wma","midprice","t3","macdext","rocr","ht_dcphase","roc","ht_phasor","ht_dcperiod","ht_sine","dema","aroonosc","sma","bop","apo","adosc","willr","mfi","ultsoc","macd","dx","kama","trange","adxr","bbands","midpoint","ht_trendline","tema","ht_trendmode","stoch","plus_di","cci","plus_dm","ema","mom","price"]
     indicators = [ranked_ind[:x] for x in np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=4)).astype(int)]
     for symbol in ["AAPL", "IBM", "DELL"]:
@@ -322,14 +325,14 @@ def benchmark_gupta2012stock():
 
 
 def benchmark_lin2009short():
-    n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=15)).astype(int))
+    n_lags = list(np.ceil(np.logspace(math.log(1, 10), math.log(30, 10), num=10)).astype(int))
     n_seqs = [1]
     n_batches = ["full_batch"]  # , "half_batch", "online"]
     # http://firsttimeprogrammer.blogspot.com/2015/09/selecting-number-of-neurons-in-hidden.html?m=1
     model_types = ["bi", "conv"]  # ["vanilla", "stacked", "stacked", "bi", "cnn", "conv"] #
-    start_train_date = "02/01/2009"
-    end_train_start_test_date = "13/08/2014"
-    end_test_date = "28/04/2017"
+    start_train_date = "06/12/2001"
+    end_train_start_test_date = "22/08/2004"
+    end_test_date = "25/11/2005"
 
 
     ranked_ind = ["trix", "mama", "ad", "ppo", "trima", "adx", "minus_di", "rsi", "obv", "natr", "minus_dm", "aroon",
