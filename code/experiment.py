@@ -339,10 +339,10 @@ def benchmark_lin2009short():
                   "ht_trendmode", "stoch", "plus_di", "cci", "plus_dm", "ema", "mom", "price"]
     indicators = [ranked_ind[:x] for x in np.ceil(np.logspace(math.log(1, 10), math.log(52, 10), num=4)).astype(int)]
     symbols = ["AHC", "AMD","BBT", "CIEN","GD","HRB","IR","JCP","NBR","NSC","PBI","PPL"
-               ,"PSA","RHI","SFA","SRE","THC","UIS","USB"]
+               ,"PSA","RHI","SFA","SRE","THC","UIS","USB", "FDO", "CPN", "KMG"]
     global n_experiment
     n_experiment = len(n_lags) * len(n_seqs) * len(n_batches) * len(indicators) * len(model_types) * len(symbols)
-    # Remove: FDO, ACE, "GTW","LXK",, "CPN",,"KMG"
+    # Updated:   Outdated: "GTW","LXK", "ACE",
     for symbol in symbols:
         experiment(file_output_name="benchmarking_lin", symbol=symbol, start_train_date=start_train_date,
                        end_train_start_test_date=end_train_start_test_date,
