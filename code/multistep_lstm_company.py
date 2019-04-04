@@ -540,7 +540,7 @@ class MultiStepLSTMCompany(Company):
             print("Trends: ", trends)
             return trends
 
-        elif metric == "apre":
+        elif metric == "apre": #renamed to MAPE Mean Absolute Percentage Error
             apres = list()
             for i in range(self.n_seq):
                 apre = np.mean(abs(actual[:, i] - predictions[:, i]) / actual[:, i])
@@ -551,6 +551,8 @@ class MultiStepLSTMCompany(Company):
         else:
             print(metric, " is not an valid metric. Return NONE")
             return None
+
+
 
     # invert differenced forecast
     def inverse_difference(self, last_ob, forecast):
